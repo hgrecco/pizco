@@ -747,10 +747,13 @@ class Server(Agent):
         return proxy
 
     @classmethod
-    def serve_in_process(cls, served_cls, args, kwargs, rep_endpoint, pub_endpoint='tcp://127.0.0.1:0', verbose=False):
+    def serve_in_process(cls, served_cls, args, kwargs, rep_endpoint, pub_endpoint='tcp://127.0.0.1:0', verbose=False, gui=True):
         cwd = os.path.dirname(inspect.getfile(served_cls))
         o = dict(python=sys.executable, pizco=__file__, rep_endpoint=rep_endpoint, pub_endpoint=pub_endpoint, cwd=cwd)
-        cmd = DEFAULT_LAUNCHER.format(o)
+        if gui:
+            cmd = '{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p  {0[cwd]} -g'.format(o)
+        else:
+            cmd = DEFAULT_LAUNCHER.format(o)
         if verbose:
             cmd += ' -v'
         subprocess.Popen(cmd, cwd=cwd, shell=True)
@@ -863,6 +866,7 @@ class Proxy(object):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser('Starts an server')
+    parser.add_argument('-g', '--gui', action='store_true')
     parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('-p', '--path', type=str)
     parser.add_argument('rep_endpoint')
@@ -879,6 +883,28 @@ if __name__ == '__main__':
 
     s = Server(None, args.rep_endpoint, args.pub_endpoint)
     print('Server started at {}'.format(s.rep_endpoint))
-    s.serve_forever()
+    if args.gui:
+        if sys.version_info < (3, 0):
+            from TKinter import Tk, Label
+        else:
+            from tkinter import Tk, Label
+
+        import time
+
+        while s.served_object is None:
+            time.sleep(.1)
+
+        name = s.served_object.__class__.__name__
+
+        root = Tk()
+        root.title('Pizco Server: {}'.format(name))
+        Label(root, text='{}'.format(name)).pack(padx=5)
+        Label(root, text='REP: {}'.format(s.rep_endpoint)).pack(padx=5)
+        Label(root, text='PUB: {}'.format(s.pub_endpoint)).pack(padx=5)
+        root.resizable(width=False, height=False)
+        root.mainloop()
+    else:
+        s.serve_forever()
+    s.stop()
     print('Server stopped')
 

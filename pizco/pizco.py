@@ -46,13 +46,15 @@ DEFAULT_LAUNCHER = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
 if not DEFAULT_LAUNCHER:
     sw = sys.platform.startswith
     if sw('linux'):
-        pass
+        DEFAULT_LAUNCHER = r"""xterm -e "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} -p \"{0[cwd]}\""' """
     elif sw('win32'):
-        pass
+        DEFAULT_LAUNCHER = r"""cmd.exe /k "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} -p \"{0[cwd]}\""' """
     elif sw('darwin'):
-        DEFAULT_LAUNCHER = ['open', '-a']
-        DEFAULT_LAUNCHER = ['osascript', '-e', "'", 'tell', 'application', '"Terminal"',
-                            '\n', 'activate', '\n', 'end', 'tell', "'"]
+        DEFAULT_LAUNCHER = r"""osascript -e 'tell application "Terminal"' """\
+                           r""" -e 'do script "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} -p \"{0[cwd]}\""' """\
+                           r""" -e 'end tell' """
+        #DEFAULT_LAUNCHER = r"""screen -d -m {0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p  {0[cwd]}"""
+
 def _uuid():
     """Generate a unique id for messages.
     """
@@ -73,8 +75,8 @@ class Signal(object):
     def disconnect(self, slot=None):
         if slot is None:
             self.slots = []
-
-        self.slots.remove(slot)
+        else:
+            self.slots.remove(slot)
 
     def emit(self, *args):
         for slot in self.slots:
@@ -747,10 +749,11 @@ class Server(Agent):
     @classmethod
     def serve_in_process(cls, served_cls, args, kwargs, rep_endpoint, pub_endpoint='tcp://127.0.0.1:0', verbose=False):
         cwd = os.path.dirname(inspect.getfile(served_cls))
-        cmd = [sys.executable, __file__, rep_endpoint, pub_endpoint, '-p', cwd]
+        o = dict(python=sys.executable, pizco=__file__, rep_endpoint=rep_endpoint, pub_endpoint=pub_endpoint, cwd=cwd)
+        cmd = DEFAULT_LAUNCHER.format(o)
         if verbose:
-            cmd += ['-v']
-        subprocess.Popen(DEFAULT_LAUNCHER + cmd, cwd=cwd)
+            cmd += ' -v'
+        subprocess.Popen(cmd, cwd=cwd, shell=True)
         import time
         time.sleep(1)
         proxy = Proxy(rep_endpoint)
@@ -811,6 +814,9 @@ class ProxyAgent(Agent):
             self._signals[(self.remote_rep_endpoint, signal_name)].disconnect(fun)
             if not self._signals[(self.remote_rep_endpoint, signal_name)].slots:
                 self.unsubscribe(self.remote_rep_endpoint, signal_name, self.remote_pub_endpoint)
+        elif action == 'emit':
+            #TODO: Emit signal in the server!
+            pass
         else:
             raise ValueError(action)
 

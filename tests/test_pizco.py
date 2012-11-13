@@ -7,7 +7,7 @@ import threading
 
 import zmq
 
-from pizco.pizco import Proxy, Server, Agent, bind, Signal, Protocol
+from pizco import Proxy, Server, Agent, bind, Signal, Protocol
 
 PROTOCOL_HEADER = Protocol.HEADER
 
@@ -100,16 +100,39 @@ class AgentTest(unittest.TestCase):
 
     def test_protocol(self):
         prot = Protocol()
+        self.assertRaises(ValueError, prot.parse, [])
+
         msg = prot.format('friend', 'bla', 'here goes the content')
         sender, topic, content, msgid = prot.parse(msg)
         self.assertEqual(sender, 'friend')
         self.assertEqual(topic, 'bla')
         self.assertEqual(content, 'here goes the content')
 
+        real_id = msg[1]
         msg[1] = 'newid'.encode('utf-8')
         self.assertRaises(ValueError, prot.parse, msg, check_msgid='wrong id')
         self.assertRaises(ValueError, prot.parse, msg, check_sender='another')
         msg[-1] = 'fake signature'.encode('utf-8')
+        msg[1] = real_id
+        self.assertEqual(sender, 'friend')
+        self.assertEqual(topic, 'bla')
+        self.assertEqual(content, 'here goes the content')
+
+    def test_protocol_key(self):
+        prot = Protocol(hmac_key='have a key')
+
+        msg = prot.format('friend', 'bla', 'here goes the content')
+        sender, topic, content, msgid = prot.parse(msg)
+        self.assertEqual(sender, 'friend')
+        self.assertEqual(topic, 'bla')
+        self.assertEqual(content, 'here goes the content')
+
+        real_id = msg[1]
+        msg[1] = 'newid'.encode('utf-8')
+        self.assertRaises(ValueError, prot.parse, msg, check_msgid='wrong id')
+        self.assertRaises(ValueError, prot.parse, msg, check_sender='another')
+        msg[-1] = 'fake signature'.encode('utf-8')
+        msg[1] = real_id
         self.assertRaises(ValueError, prot.parse, msg)
 
     def test_agent_rep(self):
@@ -121,10 +144,8 @@ class AgentTest(unittest.TestCase):
 
         prot = Protocol()
         msg = prot.format('friend', 'bla', (None, 123, 'Test'))
-        print(msg)
         req.send_multipart(msg)
         ret = req.recv_multipart()
-        print(ret)
         sender, topic, content, msgid = prot.parse(ret)
 
         self.assertEqual(sender, agent.rep_endpoint)
@@ -158,7 +179,6 @@ class AgentTest(unittest.TestCase):
         proxy._proxy_stop_server()
         proxy._proxy_stop_me()
 
-    @unittest.skip
     def test_agent_serve_in_process(self):
 
         address = 'tcp://127.0.0.1:9874'
@@ -224,22 +244,24 @@ class AgentTest(unittest.TestCase):
 
     def test_agent_publish(self):
 
+        prot = Protocol()
+
         agent = Agent()
-
-        sub = self.ctx.socket(zmq.SUB)
-        sub.connect(agent.pub_endpoint)
-        sub.setsockopt_string(zmq.SUBSCRIBE, PROTOCOL_HEADER + '+' + agent.rep_endpoint + '+topic1')
-
-        time.sleep(SLEEP_SECS)
 
         topic1 = 'topic1'
         topic2 = 'topic2'
+        sub = self.ctx.socket(zmq.SUB)
+        sub.connect(agent.pub_endpoint)
+        sub.setsockopt(zmq.SUBSCRIBE, prot.format(agent.rep_endpoint, topic1, just_header=True))
+
+        time.sleep(SLEEP_SECS)
+
         self.assertTrue(topic1 in agent.subscribers)
         self.assertEqual(agent.subscribers[topic1], 1)
         self.assertFalse(topic2 in agent.subscribers)
 
         agent.publish(topic1, 'message')
-        sender, topic, content, msgid = Protocol().parse(sub.recv_multipart())
+        sender, topic, content, msgid = prot.parse(sub.recv_multipart())
         self.assertEqual(content, 'message')
 
         agent.publish(topic2, 'message')
@@ -357,7 +379,6 @@ class AgentTest(unittest.TestCase):
         proxy.rw_prop_changed.connect(fun1)
         time.sleep(SLEEP_SECS)
         self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
-        print(proxy._proxy_agent._signals)
         proxy.rw_prop = 28
         time.sleep(SLEEP_SECS)
         self.assertEqual(proxy.rw_prop, 28)
@@ -373,6 +394,24 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(proxy.rw_prop, 29)
         self.assertEqual(fun1.called, 2)
         self.assertEqual(fun2.called, 1)
+
+        proxy.rw_prop_changed.disconnect(fun1)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop = 30
+        self.assertEqual(fun1.called, 2)
+
+        proxy.rw_prop_changed.disconnect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
+
+        proxy.rw_prop_changed.connect(fun1)
+        proxy.rw_prop_changed.connect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop_changed.disconnect(None)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
 
         proxy._proxy_stop_server()
         proxy._proxy_stop_me()

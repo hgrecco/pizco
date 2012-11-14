@@ -1,12 +1,22 @@
 # -*- coding: utf-8 -*-
 
 import time
+import argparse
 
 from pizco import Server
 
 from common import House
 
-proxy = Server.serve_in_process(House, (), {}, 'tcp://127.0.0.1:8000')
+parser = argparse.ArgumentParser('Start house server')
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help='Print logging output')
+parser.add_argument('-g', '--gui', action='store_true',
+                    help='Show graphical user interface')
+
+args = parser.parse_args()
+
+proxy = Server.serve_in_process(House, (), {}, 'tcp://127.0.0.1:8000',
+                                verbose=args.verbose, gui=args.gui)
 
 time.sleep(1)
 

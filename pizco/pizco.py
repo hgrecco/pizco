@@ -360,8 +360,14 @@ class Agent(object):
                 self.__running = True
 
         if not self.loop.running() and not in_callback:
+            def _start(loop):
+                logger.debug('Starting loop {}'.format(loop))
+                loop.start()
+                #loop.close()
+                logger.debug('Finished loop.start {}'.format(loop))
+
             with self._lock:
-                self.__class__.loop_thread = t = threading.Thread(target=self.loop.start,
+                self.__class__.loop_thread = t = threading.Thread(target=_start, args=(self.loop, ),
                                                                   name='ioloop-{}'.format(id(self.loop)))
                 t.daemon = True
                 t.start()
@@ -371,6 +377,9 @@ class Agent(object):
         """
         with self._lock:
             if not self.__running:
+                return
+
+            if not self.loop.running():
                 return
 
             self.publish('__status__', 'stop')
@@ -383,10 +392,13 @@ class Agent(object):
                 self.loop.add_callback(stream.close)
 
             self.loop_agent[self.loop].remove(self)
+            logger.debug('Number of agents in loop: {}'.format(len(self.loop_agent[self.loop])))
             if not self.loop_agent[self.loop]:
+                def _stop(loop):
+                    loop.stop()
+                    logger.debug('Stopped loop {}'.format(loop))
                 del self.loop_agent[self.loop]
-                self.loop.add_callback(lambda: self.loop.stop)
-                self.loop.add_callback(lambda: self.loop.close)
+                self.loop.add_callback(lambda: _stop(self.loop))
 
             self.__running = False
             logger.info('Stopped agent {}'.format(self.rep_endpoint))

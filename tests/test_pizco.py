@@ -303,7 +303,7 @@ class AgentTest(unittest.TestCase):
         agent.subscribe(endpoint, topic1, fun, endpoint)
         time.sleep(SLEEP_SECS)
         pub.send_multipart(prot.format(endpoint, topic1, 'you should know that'))
-        time.sleep(SLEEP_SECS)
+        time.sleep(2 * SLEEP_SECS)
         self.assertEqual(fun.called, 1)
         pub.send_multipart(prot.format(endpoint, topic2, 'you should know that'))
         time.sleep(SLEEP_SECS)

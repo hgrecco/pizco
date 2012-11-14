@@ -27,7 +27,7 @@ Design principles
 
 - PyQt-like signal and slots callbacks, compatible with PyQt.
 
-- *Soon*: Transparent handling of methods that return concurrent.Futures.
+- Transparent handling of methods that return concurrent.Futures.
 
 - *Soon*: Asynchronous and batched operation on remote objects.
 

@@ -46,12 +46,12 @@ DEFAULT_LAUNCHER = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
 if not DEFAULT_LAUNCHER:
     sw = sys.platform.startswith
     if sw('linux'):
-        DEFAULT_LAUNCHER = r"""xterm -e "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} -p \"{0[cwd]}\""' """
+        DEFAULT_LAUNCHER = r"""xterm -e "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p {0[cwd]} {0[verbose]} """
     elif sw('win32'):
-        DEFAULT_LAUNCHER = r"""cmd.exe /k "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} -p \"{0[cwd]}\""' """
+        DEFAULT_LAUNCHER = r"""cmd.exe /k "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p {0[cwd]} {0[verbose]} """
     elif sw('darwin'):
         DEFAULT_LAUNCHER = r"""osascript -e 'tell application "Terminal"' """\
-                           r""" -e 'do script "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} -p \"{0[cwd]}\""' """\
+                           r""" -e 'do script "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} -p \"{0[cwd]}\" {0[verbose]}"' """\
                            r""" -e 'end tell' """
         #DEFAULT_LAUNCHER = r"""screen -d -m {0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p  {0[cwd]}"""
 
@@ -749,13 +749,15 @@ class Server(Agent):
     @classmethod
     def serve_in_process(cls, served_cls, args, kwargs, rep_endpoint, pub_endpoint='tcp://127.0.0.1:0', verbose=False, gui=True):
         cwd = os.path.dirname(inspect.getfile(served_cls))
-        o = dict(python=sys.executable, pizco=__file__, rep_endpoint=rep_endpoint, pub_endpoint=pub_endpoint, cwd=cwd)
+        o = dict(python=sys.executable, pizco=__file__, rep_endpoint=rep_endpoint, pub_endpoint=pub_endpoint, cwd=cwd, verbose='')
+        if verbose:
+            o['verbose'] = '-v'
+
         if gui:
-            cmd = '{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p  {0[cwd]} -g'.format(o)
+            cmd = '{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p  {0[cwd]} -g {0[verbose]}'.format(o)
         else:
             cmd = DEFAULT_LAUNCHER.format(o)
-        if verbose:
-            cmd += ' -v'
+
         subprocess.Popen(cmd, cwd=cwd, shell=True)
         import time
         time.sleep(1)
@@ -765,6 +767,7 @@ class Server(Agent):
 
     def serve_forever(self):
         self.__class__.loop_thread.join()
+        logger.debug('Server stopped')
 
 
 class ProxyAgent(Agent):
@@ -904,7 +907,8 @@ if __name__ == '__main__':
         root.resizable(width=False, height=False)
         root.mainloop()
     else:
+        print('Press CTRL+c to stop ...')
         s.serve_forever()
-    s.stop()
+
     print('Server stopped')
 

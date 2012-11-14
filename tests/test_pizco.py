@@ -5,6 +5,7 @@ import operator
 import unittest
 import threading
 
+from concurrent.futures import ThreadPoolExecutor
 import zmq
 
 from pizco import Proxy, Server, Agent, bind, Signal, Protocol
@@ -12,6 +13,8 @@ from pizco import Proxy, Server, Agent, bind, Signal, Protocol
 PROTOCOL_HEADER = Protocol.HEADER
 
 SLEEP_SECS = .1
+
+executor = ThreadPoolExecutor(max_workers=1)
 
 class MockSocket(object):
 
@@ -75,6 +78,20 @@ class Example(object):
 
     def fun_raise(self):
         raise ValueError('Bla')
+
+    def fut(self):
+        def fun():
+            time.sleep(1)
+            return 10
+        return executor.submit(fun)
+
+    def fut_raise(self):
+        def fun():
+            time.sleep(1)
+            raise ValueError
+        return executor.submit(fun)
+
+
 
 
 lock = threading.RLock()
@@ -444,6 +461,21 @@ class AgentTest(unittest.TestCase):
         proxy1._proxy_stop_server()
         proxy1._proxy_stop_me()
         proxy2._proxy_stop_me()
+
+    def test_future(self):
+
+        s = Server(Example())
+
+        proxy = Proxy(s.rep_endpoint)
+
+        fut = proxy.fut()
+        self.assertEqual(fut.result(), 10)
+
+        fut = proxy.fut_raise()
+        self.assertIsInstance(fut.exception(), ValueError)
+
+        fut = proxy.fut_raise()
+        self.assertRaises(ValueError, fut.result)
 
 if __name__ == '__main__':
     unittest.main()

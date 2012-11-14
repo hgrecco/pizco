@@ -21,6 +21,8 @@ import inspect
 import logging
 import threading
 import subprocess
+from concurrent import futures
+
 from collections import defaultdict
 
 if sys.version_info < (3, 0):
@@ -691,11 +693,9 @@ class Server(Agent):
                 meth = getattr(attr, options['method'])
                 ret = meth(*options.get('args', ()),
                            **options.get('kwargs', {}))
-                return PSMessage('return', ret)
 
             elif action == 'getattr':
                 ret = getattr(self.served_object, options['name'])
-                return PSMessage('return', ret)
 
             elif action == 'setattr':
                 setattr(self.served_object, options['name'], options['value'])
@@ -712,7 +712,7 @@ class Server(Agent):
                 elif hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit'):
                     return PSMessage('remote', None)
                 else:
-                    return PSMessage('return', attr)
+                    ret = attr
 
             elif action == 'instantiate':
                 if self.served_object is not None:
@@ -727,6 +727,15 @@ class Server(Agent):
                 ret = Exception('invalid message action {}'.format(action))
                 return PSMessage('raise', ret)
 
+            if isinstance(ret, futures.Future):
+                ret.add_done_callback(lambda fut: self.publish('__future__',
+                                                               {'msgid': msgid,
+                                                                'result': fut.result() if not fut.exception() else None,
+                                                                'exception': fut.exception()}))
+                return PSMessage('future_register', msgid)
+
+            return PSMessage('return', ret)
+
         except Exception as ex:
             return PSMessage('raise', ex)
 
@@ -735,18 +744,27 @@ class Server(Agent):
         self.publish(topic, (value, old_value, other))
 
     def on_subscribe(self, topic, count):
+        try:
+            signal = getattr(self.served_object, topic)
+        except AttributeError:
+            return
+
         if count == 1:
             logger.debug('Connecting {} signal on server'.format(topic))
             def fun(value, old_value=None, other=None):
                 logger.debug('ready to emit')
                 self.emit(topic, value, old_value, other)
             self.signal_calls[topic] = fun
-            getattr(self.served_object, topic).connect(self.signal_calls[topic])
+            signal.connect(self.signal_calls[topic])
 
     def on_unsubscribe(self, topic, count):
+        try:
+            signal = getattr(self.served_object, topic)
+        except AttributeError:
+            return
         if count == 0:
             logger.debug('Disconnecting {} signal on server'.format(topic))
-            getattr(self.served_object, topic).disconnect(self.signal_calls[topic])
+            signal.disconnect(self.signal_calls[topic])
             del self.signal_calls[topic]
 
     @classmethod
@@ -798,6 +816,12 @@ class ProxyAgent(Agent):
         logger.debug('Started Proxy pointing to REP: {} and PUB: {}'.format(self.remote_rep_endpoint, self.remote_pub_endpoint))
         self._signals = defaultdict(Signal)
 
+        #: Maps msgid to future object.
+        self._futures = {}
+        #: Subscribe to notifications when a future is finished.
+        self.subscribe(self.remote_rep_endpoint, '__future__',
+                       self.on_future_completed, self.remote_pub_endpoint)
+
     def request_server(self, action, options):
         """Sends a request to the associated server using PSMessage
 
@@ -820,6 +844,11 @@ class ProxyAgent(Agent):
             return RemoteAttribute(options['name'], self.request_server, self.signal_manager)
         elif ret_action == 'return':
             return ret_options
+        elif ret_action == 'future_register':
+            fut = futures.Future()
+            fut.set_running_or_notify_cancel()
+            self._futures[ret_options] = fut
+            return fut
         else:
             raise ValueError('Unknown {}'.format(ret_action))
 
@@ -837,6 +866,13 @@ class ProxyAgent(Agent):
             pass
         else:
             raise ValueError(action)
+
+    def on_future_completed(self, sender, topic, content, msgid):
+        fut = self._futures[content['msgid']]
+        if content['exception']:
+            fut.set_exception(content['exception'])
+        else:
+            fut.set_result(content['result'])
 
     def on_notification(self, sender, topic, content, msgid):
         try:

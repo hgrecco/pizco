@@ -16,6 +16,7 @@ import uuid
 import hmac
 import json
 import pickle
+import weakref
 import hashlib
 import inspect
 import logging
@@ -284,6 +285,38 @@ class Protocol(object):
         return hmac.new(key, msg, digestmod=hashlib.sha1).digest()
 
 
+class AgentManager(object):
+
+    agents = weakref.WeakKeyDictionary()
+    threads = weakref.WeakKeyDictionary()
+    in_use = weakref.WeakSet()
+
+    @classmethod
+    def add(cls, agent):
+        loop = agent.loop
+        try:
+            cls.agents[loop].append(agent)
+        except KeyError:
+            t = threading.Thread(target=loop.start, name='ioloop-{}'.format(id(loop)))
+            cls.agents[loop] = [agent, ]
+            cls.threads[loop] = t
+            cls.in_use.add(loop)
+            t.daemon = True
+            t.start()
+
+    @classmethod
+    def remove(cls, agent):
+        loop = agent.loop
+        cls.agents[loop].remove(agent)
+        if not cls.agents[loop] and loop in cls.in_use:
+            cls.in_use.remove(loop)
+            loop.add_callback(lambda: loop.stop)
+
+    @classmethod
+    def join(cls, agent):
+        cls.threads[agent.loop].join()
+
+
 class Agent(object):
     """An object that can communicate via ZMQ to other Agents.
 
@@ -301,10 +334,9 @@ class Agent(object):
     :param loop: ZMQ event loop, if None will use default loop.
     """
 
-    loop_thread = None
-    loop_agent = defaultdict(list)
+    def __init__(self, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
+                 ctx=None, loop=None, protocol=None):
 
-    def __init__(self, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0', ctx=None, loop=None, protocol=None):
         self.ctx = ctx or zmq.Context.instance()
         self.loop = loop or ioloop.IOLoop.instance()
         self.protocol = protocol or Protocol(os.environ.get('PZC_KEY', ''))
@@ -338,72 +370,47 @@ class Agent(object):
         #: endpoints to which the socket is connected.
         self.sub_connections = set()
 
-        self._lock = threading.RLock()
-
         self.rep_to_pub = {}
 
         #Transforms sockets into Streams in the loop, add callbacks and start loop if necessary.
         self._start(rep, pub, sub)
-        logger.info('Started agent {}'.format(self.rep_endpoint))
 
     def _start(self, rep, pub, sub, in_callback=False):
-        if self.loop.running() and not in_callback:
+        AgentManager.add(self)
+        if not in_callback:
             self.loop.add_callback(lambda: self._start(rep, pub, sub, True))
         else:
-            with self._lock:
-                self.rep = zmqstream.ZMQStream(rep, self.loop)
-                self.pub = zmqstream.ZMQStream(pub, self.loop)
-                self.sub = zmqstream.ZMQStream(sub, self.loop)
-                self.rep.on_recv_stream(self._on_request)
-                self.pub.on_recv_stream(self._on_incoming_xpub)
-                self.sub.on_recv_stream(self._on_notification)
+            self.rep = zmqstream.ZMQStream(rep, self.loop)
+            self.pub = zmqstream.ZMQStream(pub, self.loop)
+            self.sub = zmqstream.ZMQStream(sub, self.loop)
+            self.rep.on_recv_stream(self._on_request)
+            self.pub.on_recv_stream(self._on_incoming_xpub)
+            self.sub.on_recv_stream(self._on_notification)
 
-                self.loop_agent[self.loop].append(self)
-                self.__running = True
+            self._running = True
 
-        if not self.loop.running() and not in_callback:
-            def _start(loop):
-                logger.debug('Starting loop {}'.format(loop))
-                loop.start()
-                #loop.close()
-                logger.debug('Finished loop.start {}'.format(loop))
-
-            with self._lock:
-                self.__class__.loop_thread = t = threading.Thread(target=_start, args=(self.loop, ),
-                                                                  name='ioloop-{}'.format(id(self.loop)))
-                t.daemon = True
-                t.start()
+            logger.info('Started agent {}'.format(self.rep_endpoint))
 
     def stop(self):
         """Stop actor unsubscribing from all notification and closing the streams.
         """
-        with self._lock:
-            if not self.__running:
-                return
+        if not self._running:
+            return
 
-            if not self.loop.running():
-                return
+        #self.publish('__status__', 'stop')
+        #for (endpoint, topic) in list(self.notifications_callbacks.keys()):
+        #    self.unsubscribe(endpoint, topic)
 
-            self.publish('__status__', 'stop')
-            #for (endpoint, topic) in list(self.notifications_callbacks.keys()):
-            #    self.unsubscribe(endpoint, topic)
-
-            for stream in (self.rep, self.pub, self.sub):
-                self.loop.add_callback(stream.flush)
-                self.loop.add_callback(lambda: stream.on_recv_stream(None))
-                self.loop.add_callback(stream.close)
-
-            self.loop_agent[self.loop].remove(self)
-            logger.debug('Number of agents in loop: {}'.format(len(self.loop_agent[self.loop])))
-            if not self.loop_agent[self.loop]:
-                def _stop(loop):
-                    loop.stop()
-                    logger.debug('Stopped loop {}'.format(loop))
-                del self.loop_agent[self.loop]
-                self.loop.add_callback(lambda: _stop(self.loop))
-
-            self.__running = False
-            logger.info('Stopped agent {}'.format(self.rep_endpoint))
+        for stream in (self.rep, self.pub, self.sub):
+            self.loop.add_callback(lambda: stream.on_recv(None))
+            self.loop.add_callback(stream.flush)
+            self.loop.add_callback(stream.close)
+        for sock in self.connections.values():
+            self.loop.add_callback(sock.close)
+        self.connections = {}
+        AgentManager.remove(self)
+        self._running = False
+        logger.info('Stopped agent {}'.format(self.rep_endpoint))
 
     def __del__(self):
         self.stop()
@@ -796,7 +803,7 @@ class Server(Agent):
         return proxy
 
     def serve_forever(self):
-        self.__class__.loop_thread.join()
+        AgentManager.join(self)
         logger.debug('Server stopped')
 
 
@@ -913,6 +920,8 @@ class Proxy(object):
     def _proxy_stop_me(self):
         self._proxy_agent.stop()
 
+    def __del__(self):
+        self._proxy_agent.stop()
 
 if __name__ == '__main__':
     import argparse

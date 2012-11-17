@@ -5,6 +5,8 @@ import operator
 import unittest
 import threading
 
+from threading import Thread
+
 from concurrent.futures import ThreadPoolExecutor
 import zmq
 
@@ -98,13 +100,36 @@ lock = threading.RLock()
 
 class AgentTest(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.ctx = zmq.Context().instance()
+    green = False
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.ctx.destroy()
+    @property
+    def Context(self):
+        return zmq.Context
+
+    def create_socket(self, type):
+        sock = self.context.socket(type)
+        self.sockets.append(sock)
+        return sock
+
+    def setUp(self):
+        self.context = self.Context.instance()
+        self.sockets = []
+
+    def tearDown(self):
+        contexts = set([self.context])
+        while self.sockets:
+            sock = self.sockets.pop()
+            contexts.add(sock.context) # in case additional contexts are created
+            sock.close(0)
+        for ctx in contexts:
+            t = Thread(target=ctx.term)
+            t.daemon = True
+            t.start()
+            t.join(timeout=2)
+            if t.is_alive():
+                # reset Context.instance, so the failure to term doesn't corrupt subsequent tests
+                zmq.core.context._instance = None
+                raise RuntimeError("context could not terminate, open sockets likely remain in test")
 
     def test_bind_address(self):
 
@@ -156,7 +181,7 @@ class AgentTest(unittest.TestCase):
 
         agent = Agent()
 
-        req = self.ctx.socket(zmq.REQ)
+        req = self.create_socket(zmq.REQ)
         req.connect(agent.rep_endpoint)
 
         prot = Protocol()
@@ -170,6 +195,7 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(content, (None, 123, 'Test'))
 
         agent.stop()
+        time.sleep(.1)
 
     def test_agent_stop(self):
 
@@ -267,7 +293,7 @@ class AgentTest(unittest.TestCase):
 
         topic1 = 'topic1'
         topic2 = 'topic2'
-        sub = self.ctx.socket(zmq.SUB)
+        sub = self.create_socket(zmq.SUB)
         sub.connect(agent.pub_endpoint)
         sub.setsockopt(zmq.SUBSCRIBE, prot.format(agent.rep_endpoint, topic1, just_header=True))
 
@@ -294,7 +320,7 @@ class AgentTest(unittest.TestCase):
 
     def test_agent_subscribe(self):
 
-        pub = self.ctx.socket(zmq.PUB)
+        pub = self.create_socket(zmq.PUB)
         port = pub.bind_to_random_port('tcp://127.0.0.1')
         endpoint = 'tcp://127.0.0.1:{}'.format(port)
 
@@ -320,7 +346,7 @@ class AgentTest(unittest.TestCase):
         agent.subscribe(endpoint, topic1, fun, endpoint)
         time.sleep(SLEEP_SECS)
         pub.send_multipart(prot.format(endpoint, topic1, 'you should know that'))
-        time.sleep(2 * SLEEP_SECS)
+        time.sleep(4 * SLEEP_SECS)
         self.assertEqual(fun.called, 1)
         pub.send_multipart(prot.format(endpoint, topic2, 'you should know that'))
         time.sleep(SLEEP_SECS)
@@ -332,7 +358,7 @@ class AgentTest(unittest.TestCase):
 
     def test_agent_subscribe_default(self):
 
-        pub = self.ctx.socket(zmq.PUB)
+        pub = self.create_socket(zmq.PUB)
         port = pub.bind_to_random_port('tcp://127.0.0.1')
         endpoint = 'tcp://127.0.0.1:{}'.format(port)
 
@@ -476,6 +502,9 @@ class AgentTest(unittest.TestCase):
 
         fut = proxy.fut_raise()
         self.assertRaises(ValueError, fut.result)
+
+        proxy._proxy_stop_me()
+        s.stop()
 
 if __name__ == '__main__':
     unittest.main()

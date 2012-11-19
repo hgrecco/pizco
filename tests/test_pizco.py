@@ -32,6 +32,22 @@ class Add1(Agent):
     def on_request(self, sender, topic, content, msgid):
         return content + 1
 
+
+class NoInspectServer(Server):
+
+    def inspect(self):
+        return set(), set()
+
+
+class ReturnDictsServer(Server):
+
+    def force_as_object(self, attr):
+        return isinstance(attr, dict)
+
+    def return_as_remote(self, attr):
+        return False
+
+
 class Example(object):
 
     def __init__(self):
@@ -281,6 +297,61 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(proxy.fun_arg2(y=2), 4)
 
         self.assertRaises(ValueError, proxy.fun_raise)
+
+        proxy._proxy_stop_server()
+        proxy._proxy_stop_me()
+
+    def test_server_no_inspect(self):
+
+        s = NoInspectServer(Example())
+
+        proxy = Proxy(s.rep_endpoint)
+        self.assertEqual(s.served_object.simple_attribute, 12)
+        self.assertEqual(proxy.simple_attribute, 12)
+        proxy.simple_attribute = 24
+        self.assertEqual(s.served_object.simple_attribute, 24)
+        self.assertEqual(proxy.simple_attribute, 24)
+
+        self.assertRaises(AttributeError, getattr, proxy, 'not_an_attribute')
+
+        self.assertEqual(s.served_object.dict_attribute[1], 2)
+        self.assertEqual(proxy.dict_attribute[1], 2)
+        self.assertRaises(KeyError, operator.getitem, proxy.dict_attribute, 2)
+        print(proxy.dict_attribute)
+        proxy.dict_attribute[2] = 4
+        self.assertEqual(s.served_object.dict_attribute[2], 4)
+        self.assertEqual(proxy.dict_attribute[2], 4)
+
+        self.assertEqual(s.served_object.rw_prop, 42)
+        self.assertEqual(proxy.rw_prop, 42)
+        proxy.rw_prop = 21
+        self.assertEqual(s.served_object.rw_prop, 21)
+        self.assertEqual(proxy.rw_prop, 21)
+
+        self.assertEqual(proxy.fun_simple(), 46)
+        self.assertEqual(proxy.fun_arg1(2), 4)
+        self.assertEqual(proxy.fun_arg2(2, 3), 8)
+        self.assertEqual(proxy.fun_arg2(y=2), 4)
+
+        self.assertRaises(ValueError, proxy.fun_raise)
+
+        proxy._proxy_stop_server()
+        proxy._proxy_stop_me()
+
+    def test_server_return_dict(self):
+
+        s = ReturnDictsServer(Example())
+
+        proxy = Proxy(s.rep_endpoint)
+
+        self.assertEqual(s.served_object.dict_attribute[1], 2)
+        self.assertEqual(s.served_object.dict_attribute, {1: 2})
+        self.assertEqual(proxy.dict_attribute[1], 2)
+        self.assertEqual(proxy.dict_attribute, {1: 2})
+
+        # This should not work as the dictionary is not remotely linked
+        proxy.dict_attribute[2] = 4
+        self.assertEqual(s.served_object.dict_attribute, {1: 2})
 
         proxy._proxy_stop_server()
         proxy._proxy_stop_me()

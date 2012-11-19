@@ -710,16 +710,15 @@ class Server(Agent):
 
             elif action == 'get':
                 attr = getattr(self.served_object, options['name'])
-                if hasattr(attr, '__get__'):
-                    return PSMessage('remote', None)
-                elif hasattr(attr, '__getitem__') or hasattr(attr, '__setitem__'):
-                    return PSMessage('remote', None)
-                elif callable(attr):
-                    return PSMessage('remote', None)
-                elif hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit'):
+                if options.get('force_as_object', False) or self.force_as_object(attr):
+                    ret = attr
+                elif self.return_as_remote(attr):
                     return PSMessage('remote', None)
                 else:
                     ret = attr
+
+            elif action == 'inspect':
+                return PSMessage('return', self.inspect())
 
             elif action == 'instantiate':
                 if self.served_object is not None:
@@ -806,6 +805,39 @@ class Server(Agent):
         AgentManager.join(self)
         logger.debug('Server stopped')
 
+    def return_as_remote(self, attr):
+        """Return True if the object must be returned as a RemoteAttribute.
+
+        Override this function to customize your server.
+        """
+        return (hasattr(attr, '__get__') or
+                hasattr(attr, '__getitem__') or
+                hasattr(attr, '__setitem__') or
+                callable(attr) or
+                (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit')) )
+
+    def force_as_object(self, attr):
+        """Return True if the object must be returned as object even if it meets the conditions of a RemoteAttribute.
+
+        Override this function to customize your server.
+        """
+        return False
+
+    def inspect(self):
+        """Inspect the served object and return a tuple containing::
+
+        - a set with the attributes that should be returned as RemoteAttribute.
+        - a set with the attributes that should be returned as Objects.
+
+        Override this function to customize your server.
+        .. seealso: return_as_remote, force_as_object
+        """
+        remotes = set([name for name, value in inspect.getmembers(self.served_object)
+                       if not name.startswith('_') and self.return_as_remote(value)])
+        objects = set([name for name, value in inspect.getmembers(self.served_object)
+                       if not name.startswith('_') and self.force_as_object(value)])
+        return remotes, objects
+
 
 class ProxyAgent(Agent):
     """Helper class that handles Proxy to Server communication.
@@ -829,13 +861,16 @@ class ProxyAgent(Agent):
         self.subscribe(self.remote_rep_endpoint, '__future__',
                        self.on_future_completed, self.remote_pub_endpoint)
 
-    def request_server(self, action, options):
+    def request_server(self, action, options, force_as_object=False):
         """Sends a request to the associated server using PSMessage
 
         :param action: action to be sent.
         :param options: options of the action.
         :return:
         """
+        if force_as_object:
+            options['force_as_object'] = True
+
         content = self.request(self.remote_rep_endpoint, PSMessage(action, options))
 
         try:
@@ -901,11 +936,14 @@ class Proxy(object):
 
     def __init__(self, remote_endpoint):
         self._proxy_agent = ProxyAgent(remote_endpoint)
-
+        self._proxy_attr_as_remote, self._proxy_attr_as_object = self._proxy_agent.request_server('inspect', {})
+        
     def __getattr__(self, item):
         if item.startswith('_proxy_'):
             return super().__getattr__(item)
-        return self._proxy_agent.request_server('get', {'name': item})
+        if item in self._proxy_attr_as_remote:
+            return RemoteAttribute(item, self._proxy_agent.request_server, self._proxy_agent.signal_manager)
+        return self._proxy_agent.request_server('get', {'name': item}, item in self._proxy_attr_as_object)
 
     def __setattr__(self, item, value):
         if item.startswith('_proxy_'):

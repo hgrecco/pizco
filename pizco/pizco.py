@@ -964,11 +964,16 @@ class Proxy(object):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser('Starts an server')
-    parser.add_argument('-g', '--gui', action='store_true')
-    parser.add_argument('-v', '--verbose', action='store_true')
-    parser.add_argument('-p', '--path', type=str)
-    parser.add_argument('rep_endpoint')
-    parser.add_argument('pub_endpoint')
+    parser.add_argument('-g', '--gui', action='store_true',
+                        help='Open a small window to display the server status.')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='Print debug information to the console.')
+    parser.add_argument('-p', '--path', type=str,
+                        help='Append this path to sys.path')
+    parser.add_argument('rep_endpoint',
+                        help='REP endpoint of the Server')
+    parser.add_argument('pub_endpoint',
+                        help='PUB endpoint of the Server')
 
     args = parser.parse_args()
 

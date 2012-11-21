@@ -5,15 +5,14 @@ Pizco is Python module/package that allows python objects to communicate.
 Objects can be exposed to other process in the same computer or over the network,
 allowing clear separation of concerns, resources and permissions.
 
-Pizco does not only support calling methods from remote objects but also
+Pizco not only support calling methods from remote objects but also
 accessing their attributes, dictionary attributes and properties. Most importantly,
 using a Qt-like (and Qt compatible!) signal and slot mechanism you can easily
 register notifications.
 
 As ZMQ is used as the transport layer, communication is fast and efficient,
 and different protocols are supported. It has a complete test coverage.
-It runs in Python 2.6, 2.7, 3.0, 3.1 and 3.2 and requires PyZMQ_.
-It is licensed under BSD.
+It runs in Python 3.2+ and requires PyZMQ_. It is licensed under BSD.
 
 
 Design principles
@@ -35,7 +34,7 @@ Design principles
   It is a single stand-alone module that can be installed as a package or added
   side by side to your project.
 
-- Python 2 and 3: A single codebase that runs unchanged in Python 2.6+ and Python 3.0+.
+- *Soon*: Python 2 and 3: A single codebase that runs unchanged in Python 2.6+ and Python 3.0+.
 
 
 .. _PyZMQ: https://github.com/zeromq/pyzmq

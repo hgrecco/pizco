@@ -1,6 +1,6 @@
 
-Command line tools
-------------------
+Command line tool
+=================
 
 You can start a server from the command line calling `pizco.py`. For example::
 

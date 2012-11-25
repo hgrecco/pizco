@@ -10,7 +10,7 @@ Pizco is Python module/package that allows python objects to communicate.
 Objects can be exposed to other process in the same computer or over the network,
 allowing clear separation of concerns, resources and permissions.
 
-Pizco not only support calling methods from remote objects but also
+Pizco supports calling methods from remote objects and also
 accessing their attributes, dictionary attributes and properties. Most importantly,
 using a Qt-like (and Qt compatible!) signal and slot mechanism you can easily
 register notifications.
@@ -121,6 +121,8 @@ Contents
    signals
    serve_in_process
    commandline
+   internals
+   api
 
 
 Indices and tables

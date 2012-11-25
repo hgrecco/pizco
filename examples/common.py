@@ -3,8 +3,11 @@
 import time
 import logging
 
+from concurrent import futures
 
 from pizco import Signal
+
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -25,6 +28,8 @@ class House(object):
         self.lights_on_changed = Signal()
 
         self.color_changed = Signal()
+
+        self._pool = futures.ThreadPoolExecutor(max_workers=1)
 
     @property
     def door_open(self):
@@ -65,5 +70,12 @@ class House(object):
         time.sleep(.5)
         self.color_changed.emit(color)
         logger.info('Painted: {}'.format(color))
+
+    def _changing_roof(self):
+        time.sleep(1)
+        return 'You have a new roof'
+
+    def change_roof(self):
+        return self._pool.submit(self._changing_roof)
 
 

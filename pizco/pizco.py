@@ -22,15 +22,25 @@ import inspect
 import logging
 import threading
 import subprocess
-from concurrent import futures
 
 from collections import defaultdict
 
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 if sys.version_info < (3, 0):
+    import cPickle as pickle
+
+if sys.version_info < (3, 2):
     try:
-        import cPickle as pickle
-    except ImportError:
-        pass
+        import futures
+    except ImportError as ex:
+        logger.warning('Could not import futures: {}'.format(ex))
+        class futures:
+            class Future:
+                pass
+else:
+    from concurrent import futures
 
 if sys.version_info < (3, 3):
     def compare_digest(a, b):
@@ -38,11 +48,11 @@ if sys.version_info < (3, 3):
 else:
     compare_digest = hmac.compare_digest
 
-import zmq
-from zmq.eventloop import zmqstream, ioloop
-
-logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())
+try:
+    import zmq
+    from zmq.eventloop import zmqstream, ioloop
+except Exception as ex:
+    logger.warning('Could not import ZMQ: {}'.format(ex))
 
 DEFAULT_LAUNCHER = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
 
@@ -330,8 +340,9 @@ class Agent(object):
 
     :param rep_endpoint: endpoint of the REP socket.
     :param pub_endpoint: endpoint of the PUB socket.
-    :param ctx: ZMQ context, if None will use default context.
-    :param loop: ZMQ event loop, if None will use default loop.
+    :param ctx: ZMQ context. If None, the default context will be used.
+    :param loop: ZMQ event loop. If None, the default loop will be used.
+    :param protocol: Protocol to be used for the messages.
     """
 
     def __init__(self, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
@@ -339,7 +350,8 @@ class Agent(object):
 
         self.ctx = ctx or zmq.Context.instance()
         self.loop = loop or ioloop.IOLoop.instance()
-        self.protocol = protocol or Protocol(os.environ.get('PZC_KEY', ''))
+        self.protocol = protocol or Protocol(os.environ.get('PZC_KEY', ''),
+                                             os.environ.get('PZC_SER', 'pickle'))
         logger.debug('New agent at {} with context {} and loop {}'.format(rep_endpoint, self.ctx, self.loop))
 
         #: Connections to other agents (endpoint:REQ socket)

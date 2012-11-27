@@ -21,6 +21,7 @@ import hashlib
 import inspect
 import logging
 import threading
+import traceback
 import subprocess
 
 from collections import defaultdict
@@ -55,6 +56,8 @@ except Exception as ex:
     logger.warning('Could not import ZMQ: {}'.format(ex))
 
 DEFAULT_LAUNCHER = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
+
+HIDE_TRACEBACK = os.environ.get('PZC_HIDE_TRACEBACK', True)
 
 if not DEFAULT_LAUNCHER:
     sw = sys.platform.startswith
@@ -734,7 +737,8 @@ class Server(Agent):
 
             elif action == 'instantiate':
                 if self.served_object is not None:
-                    return PSMessage('raise', Exception('Cannot instantiate another object.'))
+                    return PSMessage('raise', (Exception('Cannot instantiate another object.'),
+                                               ''))
 
                 mod_name, class_name = options['class'].rsplit('.', 1)
                 mod = __import__(mod_name, fromlist=[class_name])
@@ -743,7 +747,7 @@ class Server(Agent):
                 return PSMessage('return', None)
             else:
                 ret = Exception('invalid message action {}'.format(action))
-                return PSMessage('raise', ret)
+                return PSMessage('raise', (ret, ''))
 
             if isinstance(ret, futures.Future):
                 ret.add_done_callback(lambda fut: self.publish('__future__',
@@ -755,7 +759,9 @@ class Server(Agent):
             return PSMessage('return', ret)
 
         except Exception as ex:
-            return PSMessage('raise', ex)
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            tb = traceback.format_exception(exc_type, exc_value, exc_tb)[1:]
+            return PSMessage('raise', (ex, tb))
 
     def emit(self, topic, value, old_value, other):
         logger.debug('Emitting {}, {}, {}, {}'.format(topic, value, old_value, other))
@@ -893,7 +899,9 @@ class ProxyAgent(Agent):
             raise ValueError('Invalid response from Server {}'.format(content))
 
         if ret_action == 'raise':
-            raise ret_options
+            exc, traceback_text = ret_options
+            exc._pzc_traceback = traceback_text
+            raise exc
         elif ret_action == 'remote':
             return RemoteAttribute(options['name'], self.request_server, self.signal_manager)
         elif ret_action == 'return':
@@ -938,6 +946,17 @@ class ProxyAgent(Agent):
         if not isinstance(served_cls, str):
             served_cls = served_cls.__module__ + '.' + served_cls.__name__
         self.request_server('instantiate', {'class': served_cls, 'args': args, 'kwargs': kwargs})
+
+
+def _except_hook(type, value, tb):
+    for item in traceback.format_exception(type, value, tb)[:-1] + getattr(value, '_pzc_traceback', []):
+        if HIDE_TRACEBACK and 'pizco.py' in item:
+            continue
+        sys.stderr.write(item)
+
+
+def set_excepthook():
+    sys.excepthook = _except_hook
 
 
 class Proxy(object):

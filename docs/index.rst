@@ -1,6 +1,6 @@
 
-Pizco: Python remoting via ZMQ
-==============================
+Pizco: Python remoting with ZMQ
+===============================
 
 .. image:: _static/pizco.png
    :alt: Pizco: remoting in Python with ZMQ
@@ -89,11 +89,13 @@ Pizco in action
 
     proxy = Proxy('tcp://127.0.0.1:8000')
 
+    print('{} * {} = {}'.format(proxy.factor, 8, proxy.calculate(8)))
+
     def on_factor_changed(new_value, old_value):
         print('The factor was changed from {} to {}'.format(old_value, new_value))
         print('{} * {} = {}'.format(proxy.factor, 8, proxy.calculate(8)))
 
-    print('{} * {} = {}'.format(proxy.factor, 8, proxy.calculate(8)))
+    proxy.factor_changed.connect(on_factor_changed)
 
     for n in (3, 4, 5):
         proxy.factor = n

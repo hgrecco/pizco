@@ -16,8 +16,8 @@ You can directly start the server from the client application::
     print(robot_proxy.age)
 
 
-A new process is started using the same python interpreter. `Pizco` will provide
-this new process with the path of the `Robot` class but you need to be sure that
+The server is started in a new instance of the same python interpreter. `Pizco` will
+provide this new process with the path of the `Robot` class but you need to be sure that
 any other dependency is available.
 
 If the `Robot` constructor takes some arguments you can give them like this::

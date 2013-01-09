@@ -19,11 +19,11 @@ The syntax in the client side is exactly as it is done in PyQt_/PySide_
 Under the hood, the proxy is subscribing to an event in the server
 using a ZMQ SUB socket. When the `arm_moved` signal is emitted server-side,
 the server will **asynchronously** notify the proxy using a PUB socket.
-The proxy will call `hey` when it receives message. So you have client side
-notification of server side events.
+The proxy will call `print_notification` when it receives message. So you
+have client side notification of server side events.
 
 It is important to note that if you are using PyQt/PySide signals in your
-code, no modification is needed to used `Pizco`. But not only PyQt/PySide
+code, no modification is needed to use `Pizco`. But not only PyQt/PySide
 signals work. An attribute is considered `Signal` if it exposes at least
 three methods: `connect`, `disconnect` and `emit`.
 
@@ -32,8 +32,9 @@ Just like PyQt, multiple slots can be connected to the same signal::
     proxy.arm_moved.connect(print_notification)
     proxy.arm_moved.connect(mail_notification)
 
-and they will be called in the order that they were added. To disconnect
-from a signal::
+and they will be called in the order that they were added.
+
+To disconnect from a signal::
 
     proxy.arm_moved.disconnect(mail_notification)
 

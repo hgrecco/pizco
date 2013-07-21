@@ -10,21 +10,14 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 import zmq
 
-from pizco import Proxy, Server, Agent, bind, Signal, Protocol
+from pizco import Proxy, Server, Agent, Signal
+from pizco.protocol import Protocol
 
 PROTOCOL_HEADER = Protocol.HEADER
 
 SLEEP_SECS = .1
 
 executor = ThreadPoolExecutor(max_workers=1)
-
-class MockSocket(object):
-
-    def bind(self, address):
-        pass
-
-    def bind_to_random_port(self, address):
-        return 42
 
 
 class Add1(Agent):
@@ -146,52 +139,6 @@ class AgentTest(unittest.TestCase):
                 # reset Context.instance, so the failure to term doesn't corrupt subsequent tests
                 zmq.core.context._instance = None
                 raise RuntimeError("context could not terminate, open sockets likely remain in test")
-
-    def test_bind_address(self):
-
-        mock = MockSocket()
-        self.assertEqual(bind(mock, 'tcp://127.0.0.1:5000'), 'tcp://127.0.0.1:5000')
-        self.assertEqual(bind(mock, 'tcp://127.0.0.1:0'), 'tcp://127.0.0.1:42')
-        self.assertEqual(bind(mock, ('127.0.0.1', 5000)), 'tcp://127.0.0.1:5000')
-        self.assertEqual(bind(mock, ('127.0.0.1', 0)), 'tcp://127.0.0.1:42')
-        self.assertEqual(bind(mock, 'inproc://bla'), 'inproc://bla')
-
-    def test_protocol(self):
-        prot = Protocol()
-        self.assertRaises(ValueError, prot.parse, [])
-
-        msg = prot.format('friend', 'bla', 'here goes the content')
-        sender, topic, content, msgid = prot.parse(msg)
-        self.assertEqual(sender, 'friend')
-        self.assertEqual(topic, 'bla')
-        self.assertEqual(content, 'here goes the content')
-
-        real_id = msg[1]
-        msg[1] = 'newid'.encode('utf-8')
-        self.assertRaises(ValueError, prot.parse, msg, check_msgid='wrong id')
-        self.assertRaises(ValueError, prot.parse, msg, check_sender='another')
-        msg[-1] = 'fake signature'.encode('utf-8')
-        msg[1] = real_id
-        self.assertEqual(sender, 'friend')
-        self.assertEqual(topic, 'bla')
-        self.assertEqual(content, 'here goes the content')
-
-    def test_protocol_key(self):
-        prot = Protocol(hmac_key='have a key')
-
-        msg = prot.format('friend', 'bla', 'here goes the content')
-        sender, topic, content, msgid = prot.parse(msg)
-        self.assertEqual(sender, 'friend')
-        self.assertEqual(topic, 'bla')
-        self.assertEqual(content, 'here goes the content')
-
-        real_id = msg[1]
-        msg[1] = 'newid'.encode('utf-8')
-        self.assertRaises(ValueError, prot.parse, msg, check_msgid='wrong id')
-        self.assertRaises(ValueError, prot.parse, msg, check_sender='another')
-        msg[-1] = 'fake signature'.encode('utf-8')
-        msg[1] = real_id
-        self.assertRaises(ValueError, prot.parse, msg)
 
     def test_agent_rep(self):
 
@@ -438,7 +385,7 @@ class AgentTest(unittest.TestCase):
             called = 0
 
             def on_notification(self, sender, topic, msgid, content):
-                self.called = self.called + 1
+                self.called += 1
 
         agent = DefNot()
 

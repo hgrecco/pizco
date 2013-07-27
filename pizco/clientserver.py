@@ -15,11 +15,9 @@ import sys
 import inspect
 import threading
 import traceback
-import subprocess
-
 from collections import defaultdict
 
-from . import logger, DEFAULT_LAUNCHER
+from . import LOGGER, launch
 from .util import Signal
 from .agent import Agent
 
@@ -49,7 +47,7 @@ class RemoteAttribute(object):
     def __get__(self, key):
         return self.request('exec', {'name': self.name,
                                      'method': '__get__',
-                                      'args': (key, )})
+                                     'args': (key, )})
 
     def __set__(self, key, value):
         return self.request('exec', {'name': self.name,
@@ -76,7 +74,7 @@ class RemoteAttribute(object):
         return self.request('exec', payload)
 
     def connect(self, fun):
-        logger.debug('Connecting {} to {}'.format(self.name, fun))
+        LOGGER.debug('Connecting {} to {}'.format(self.name, fun))
         self.signal_manager('connect', self.name, fun)
 
     def disconnect(self, fun):
@@ -191,7 +189,7 @@ class Server(Agent):
             return PSMessage('raise', (ex, tb))
 
     def emit(self, topic, value, old_value, other):
-        logger.debug('Emitting {}, {}, {}, {}'.format(topic, value, old_value, other))
+        LOGGER.debug('Emitting {}, {}, {}, {}'.format(topic, value, old_value, other))
         self.publish(topic, (value, old_value, other))
 
     def on_subscribe(self, topic, count):
@@ -201,9 +199,9 @@ class Server(Agent):
             return
 
         if count == 1:
-            logger.debug('Connecting {} signal on server'.format(topic))
+            LOGGER.debug('Connecting {} signal on server'.format(topic))
             def fun(value, old_value=None, other=None):
-                logger.debug('ready to emit')
+                LOGGER.debug('ready to emit')
                 self.emit(topic, value, old_value, other)
             self.signal_calls[topic] = fun
             signal.connect(self.signal_calls[topic])
@@ -214,12 +212,13 @@ class Server(Agent):
         except AttributeError:
             return
         if count == 0:
-            logger.debug('Disconnecting {} signal on server'.format(topic))
+            LOGGER.debug('Disconnecting {} signal on server'.format(topic))
             signal.disconnect(self.signal_calls[topic])
             del self.signal_calls[topic]
 
     @classmethod
-    def serve_in_thread(cls, served_cls, args, kwargs, rep_endpoint, pub_endpoint='tcp://127.0.0.1:0'):
+    def serve_in_thread(cls, served_cls, args, kwargs,
+                        rep_endpoint, pub_endpoint='tcp://127.0.0.1:0'):
         t = threading.Thread(target=cls, args=(None, rep_endpoint, pub_endpoint))
         t.start()
         proxy = Proxy(rep_endpoint)
@@ -227,20 +226,11 @@ class Server(Agent):
         return proxy
 
     @classmethod
-    def serve_in_process(cls, served_cls, args, kwargs, rep_endpoint, pub_endpoint='tcp://127.0.0.1:0', verbose=False, gui=True):
+    def serve_in_process(cls, served_cls, args, kwargs,
+                         rep_endpoint, pub_endpoint='tcp://127.0.0.1:0',
+                         verbose=False, gui=False):
         cwd = os.path.dirname(inspect.getfile(served_cls))
-        o = dict(python=sys.executable, pizco=__file__,
-                 rep_endpoint=rep_endpoint, pub_endpoint=pub_endpoint,
-                 cwd=cwd, verbose='')
-        if verbose:
-            o['verbose'] = '-v'
-
-        if gui:
-            cmd = '{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p  {0[cwd]} -g {0[verbose]}'.format(o)
-        else:
-            cmd = DEFAULT_LAUNCHER.format(o)
-
-        subprocess.Popen(cmd, cwd=cwd, shell=True)
+        launch(cwd, rep_endpoint, pub_endpoint, verbose, gui)
         import time
         time.sleep(1)
         proxy = Proxy(rep_endpoint)
@@ -249,7 +239,7 @@ class Server(Agent):
 
     def serve_forever(self):
         self.join()
-        logger.debug('Server stopped')
+        LOGGER.debug('Server stopped')
 
     def return_as_remote(self, attr):
         """Return True if the object must be returned as a RemoteAttribute.
@@ -298,7 +288,7 @@ class ProxyAgent(Agent):
         ret = self.request(self.remote_rep_endpoint, 'info')
         self.remote_pub_endpoint = ret['pub_endpoint']
 
-        logger.debug('Started Proxy pointing to REP: {} and PUB: {}'.format(self.remote_rep_endpoint, self.remote_pub_endpoint))
+        LOGGER.debug('Started Proxy pointing to REP: {} and PUB: {}'.format(self.remote_rep_endpoint, self.remote_pub_endpoint))
         self._signals = defaultdict(Signal)
 
         #: Maps msgid to future object.

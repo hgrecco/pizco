@@ -12,30 +12,12 @@
 import os
 import sys
 import logging
+import subprocess
 
-logger = logging.getLogger(__name__)
-logger.addHandler(logging.NullHandler())
+LOGGER = logging.getLogger(__name__)
+LOGGER.addHandler(logging.NullHandler())
 
-DEFAULT_LAUNCHER = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
-
-if not DEFAULT_LAUNCHER:
-    sw = sys.platform.startswith
-    if sw('linux'):
-        DEFAULT_LAUNCHER = r"""xterm -e "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} """ \
-                           r"""-p {0[cwd]} {0[verbose]} """
-    elif sw('win32'):
-        DEFAULT_LAUNCHER = r"""cmd.exe /k "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} """\
-                           r"""-p {0[cwd]} {0[verbose]} """
-    elif sw('darwin'):
-        DEFAULT_LAUNCHER = r"""osascript -e 'tell application "Terminal"' """\
-                           r""" -e 'do script "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} """
-        r"""-p \"{0[cwd]}\" {0[verbose]}"' """\
-                           r""" -e 'end tell' """
-        #DEFAULT_LAUNCHER = r"""screen -d -m {0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} -p  {0[cwd]}"""
-
-from .clientserver import Proxy, Server, Signal, Agent
-
-def main():
+def main(args=None):
     import argparse
     parser = argparse.ArgumentParser('Starts an server')
     parser.add_argument('-g', '--gui', action='store_true',
@@ -49,15 +31,16 @@ def main():
     parser.add_argument('pub_endpoint',
                         help='PUB endpoint of the Server')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
     if args.path:
         sys.path.append(args.path)
 
     if args.verbose:
-        logger.addHandler(logging.StreamHandler())
-        logger.setLevel(logging.DEBUG)
+        LOGGER.addHandler(logging.StreamHandler())
+        LOGGER.setLevel(logging.DEBUG)
 
+    from pizco import Server
     s = Server(None, args.rep_endpoint, args.pub_endpoint)
     print('Server started at {}'.format(s.rep_endpoint))
     if args.gui:
@@ -85,3 +68,40 @@ def main():
         s.serve_forever()
 
     print('Server stopped')
+
+
+def launch(cwd, rep_endpoint, pub_endpoint, verbose=False, gui=False):
+    launcher = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
+
+    if not launcher:
+        sw = sys.platform.startswith
+        if sw('linux'):
+            launcher = r"""xterm -e "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} """ \
+                       r"""-p {0[cwd]} {0[verbose]} {0[gui]} """
+        elif sw('win32'):
+            launcher = r"""cmd.exe /k "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} """\
+                       r"""-p {0[cwd]} {0[verbose]} {0[gui]} """
+        elif sw('darwin'):
+            launcher = r"""osascript -e 'tell application "Terminal"' """\
+                       r""" -e 'do script "\"{0[python]}\" \"{0[pizco]}\" {0[rep_endpoint]} {0[pub_endpoint]} """ \
+                       r"""-p \"{0[cwd]}\" {0[verbose]} {0[gui]}"' """ \
+                       r""" -e 'end tell' """
+        else:
+            raise RuntimeError('Platform not support: {}'.format(sys.platform))
+
+    o = dict(python=sys.executable, pizco=__file__,
+             rep_endpoint=rep_endpoint, pub_endpoint=pub_endpoint,
+             cwd=cwd, verbose='')
+
+    o['verbose'] = '-v' if verbose else ''
+    o['gui'] = '-g' if gui else ''
+
+    cmd = launcher.format(o)
+
+    subprocess.Popen(cmd, cwd=cwd, shell=True)
+
+
+if __name__ == '__main__':
+    main()
+else:
+    from .clientserver import Proxy, Server, Signal, Agent

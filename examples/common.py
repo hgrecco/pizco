@@ -7,8 +7,6 @@ from concurrent import futures
 
 from pizco import Signal
 
-
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
@@ -16,6 +14,7 @@ ch.setLevel(logging.INFO)
 logger.addHandler(ch)
 
 COLORS = ('green', 'blue', 'white', 'yellow')
+
 
 class House(object):
 

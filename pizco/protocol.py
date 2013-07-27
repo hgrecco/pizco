@@ -73,7 +73,8 @@ class Protocol(object):
         try:
             signed, signature = message[:4], message[4]
         except:
-            raise ValueError('The message has the wrong number of parts. Expected 5, received: {}'.format(len(message)))
+            raise ValueError('The message has the wrong number of parts. '
+                             'Expected 5, received: {}'.format(len(message)))
 
         if key and not compare_digest(self._signature(key, signed), signature):
             raise ValueError('The signature does not match.')

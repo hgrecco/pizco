@@ -525,9 +525,10 @@ class Agent(object):
 
         This methods is executed in the IOLoop thread.
         """
+        logger.debug('On Incoming XPUB {} {}'.format(stream, message))
         try:
-            message = message[0]
-            action, full_topic = message[0] == 1, message[1:].decode("utf-8")
+            message = message[0].decode("utf-8")
+            action, full_topic = message[0] == '\x01', message[1:]
             protocol, source, topic = full_topic.split('+')
         except Exception as ex:
             logger.debug('Invalid message from {}: {}\n{}'.format(stream, message, ex))

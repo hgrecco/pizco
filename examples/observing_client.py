@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 
+import sys
 import time
 
 from pizco import Proxy
+
+if sys.version_info < (3,0):
+    input = raw_input
 
 def on_lights_on(value, old_value, others):
     print('The lights_on has been changed from {} to {}'.format(old_value, value))

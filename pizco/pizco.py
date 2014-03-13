@@ -678,7 +678,7 @@ class Server(Agent):
     def __init__(self, served_object, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0', ctx=None, loop=None):
         self.served_object = served_object
         self.signal_calls = {}
-        super().__init__(rep_endpoint, pub_endpoint, ctx, loop)
+        super(Server, self).__init__(rep_endpoint, pub_endpoint, ctx, loop)
 
     def on_request(self, sender, topic, content, msgid):
         """Handles Proxy Server communication, handling attribute access in served_object.
@@ -707,7 +707,7 @@ class Server(Agent):
             if content_type != 'PSMessage':
                 raise ValueError()
         except:
-            return super().on_request(sender, topic, content, msgid)
+            return super(Server, self).on_request(sender, topic, content, msgid)
 
         try:
             if action == 'exec':
@@ -864,7 +864,7 @@ class ProxyAgent(Agent):
     """
 
     def __init__(self, remote_rep_endpoint):
-        super().__init__()
+        super(ProxyAgent, self).__init__()
 
         self.remote_rep_endpoint = remote_rep_endpoint
         ret = self.request(self.remote_rep_endpoint, 'info')
@@ -925,6 +925,7 @@ class ProxyAgent(Agent):
                 self.unsubscribe(self.remote_rep_endpoint, signal_name, self.remote_pub_endpoint)
         elif action == 'emit':
             #TODO: Emit signal in the server!
+            logger.warning("emit to server not implemented")
             pass
         else:
             raise ValueError(action)
@@ -940,7 +941,7 @@ class ProxyAgent(Agent):
         try:
             self._signals[(sender, topic)].emit(*content)
         except KeyError:
-            super().on_notification(sender, topic, content, msgid)
+            super(ProxyAgent, self).on_notification(sender, topic, content, msgid)
 
     def instantiate(self, served_cls, args, kwargs):
         if not isinstance(served_cls, str):
@@ -971,14 +972,14 @@ class Proxy(object):
         
     def __getattr__(self, item):
         if item.startswith('_proxy_'):
-            return super().__getattr__(item)
+            return super(Proxy, self).__getattr__(item)
         if item in self._proxy_attr_as_remote:
             return RemoteAttribute(item, self._proxy_agent.request_server, self._proxy_agent.signal_manager)
         return self._proxy_agent.request_server('get', {'name': item}, item in self._proxy_attr_as_object)
 
     def __setattr__(self, item, value):
         if item.startswith('_proxy_'):
-            super().__setattr__(item, value)
+            super(Proxy, self).__setattr__(item, value)
             return
 
         return self._proxy_agent.request_server('setattr', {'name': item, 'value': value})
@@ -1019,7 +1020,7 @@ if __name__ == '__main__':
     print('Server started at {}'.format(s.rep_endpoint))
     if args.gui:
         if sys.version_info < (3, 0):
-            from TKinter import Tk, Label
+            from Tkinter import Tk, Label
         else:
             from tkinter import Tk, Label
 

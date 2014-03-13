@@ -55,6 +55,11 @@ try:
 except Exception as ex:
     logger.warning('Could not import ZMQ: {}'.format(ex))
 
+if zmq.zmq_version_info()[0] < 3:
+    logger.warning(
+        "ZMQ version[{}] is < 3, notifications will not work".format(
+            zmq.zmq_version()))
+
 DEFAULT_LAUNCHER = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
 
 HIDE_TRACEBACK = os.environ.get('PZC_HIDE_TRACEBACK', True)

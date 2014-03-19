@@ -332,7 +332,11 @@ class AgentManager(object):
 
     @classmethod
     def join(cls, agent):
-        cls.threads[agent.loop].join()
+        try:
+            while cls.threads[agent.loop].isAlive():
+                cls.threads[agent.loop].join(1)
+        except (KeyboardInterrupt, SystemExit):
+            return
 
 
 class Agent(object):

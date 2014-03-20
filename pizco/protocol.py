@@ -144,5 +144,5 @@ class Protocol(object):
     def _signature(self, key, parts):
         if not key:
             return b''
-        msg = sum(parts, b'')
+        msg = b''.join(parts)
         return hmac.new(key, msg, digestmod=hashlib.sha1).digest()

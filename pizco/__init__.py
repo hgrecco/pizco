@@ -13,6 +13,14 @@ import os
 import sys
 import logging
 import subprocess
+import warnings
+
+import zmq
+
+if (zmq.zmq_version_info()[0] < 3):
+    warnings.warn(
+        "ZMQ version {} < 3, notifications will not work".format(
+            zmq.zmq_version()))
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.NullHandler())
@@ -45,7 +53,7 @@ def main(args=None):
     print('Server started at {}'.format(s.rep_endpoint))
     if args.gui:
         if sys.version_info < (3, 0):
-            from TKinter import Tk, Label
+            from Tkinter import Tk, Label
         else:
             from tkinter import Tk, Label
 
@@ -77,7 +85,7 @@ def launch(cwd, rep_endpoint, pub_endpoint, verbose=False, gui=False):
         sw = sys.platform.startswith
         if sw('linux'):
             launcher = r"""xterm -e "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} """ \
-                       r"""-p {0[cwd]} {0[verbose]} {0[gui]} """
+                       r"""-p {0[cwd]} {0[verbose]} {0[gui]}" """
         elif sw('win32'):
             launcher = r"""cmd.exe /k "{0[python]} {0[pizco]} {0[rep_endpoint]} {0[pub_endpoint]} """\
                        r"""-p {0[cwd]} {0[verbose]} {0[gui]} """

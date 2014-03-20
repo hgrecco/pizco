@@ -41,3 +41,6 @@ class TestProtocol(unittest.TestCase):
         msg[-1] = 'fake signature'.encode('utf-8')
         msg[1] = real_id
         self.assertRaises(ValueError, prot.parse, msg)
+
+if __name__ == '__main__':
+    unittest.main()

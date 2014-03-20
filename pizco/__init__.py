@@ -78,7 +78,9 @@ def main(args=None):
     print('Server stopped')
 
 
-def launch(cwd, rep_endpoint, pub_endpoint, verbose=False, gui=False):
+def launch(cwd, rep_endpoint, pub_endpoint, verbose=True, gui=False):
+    if cwd == '':
+        cwd = '.'
     launcher = os.environ.get('PZC_DEFAULT_LAUNCHER', None)
 
     if not launcher:

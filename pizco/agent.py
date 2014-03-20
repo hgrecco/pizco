@@ -138,7 +138,7 @@ class Agent(object):
     def stop(self):
         """Stop actor unsubscribing from all notification and closing the streams.
         """
-        if not self._running:
+        if not getattr(self, '_running', False):
             return
 
         #self.publish('__status__', 'stop')
@@ -220,8 +220,7 @@ class Agent(object):
             return {'rep_endpoint': self.rep_endpoint,
                     'pub_endpoint': self.pub_endpoint}
         elif content == 'stop':
-            cb = ioloop.DelayedCallback(self.stop, .1, self.loop)
-            cb.start()
+            self.loop.add_timeout(.1, self.stop)
             return 'stopping'
         return content
 

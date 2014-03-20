@@ -10,6 +10,13 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 import zmq
 
+
+def set_zmq_context_to_none():
+    if hasattr(zmq.Context, '_instance'):
+        zmq.Context._instance = None
+    else:
+        zmq.context._instance = None
+
 from pizco import Proxy, Server, Agent, Signal
 from pizco.protocol import Protocol
 
@@ -125,6 +132,7 @@ class AgentTest(unittest.TestCase):
         self.sockets = []
 
     def tearDown(self):
+        time.sleep(.1)  # give things time to stop
         contexts = set([self.context])
         while self.sockets:
             sock = self.sockets.pop()
@@ -137,7 +145,7 @@ class AgentTest(unittest.TestCase):
             t.join(timeout=2)
             if t.is_alive():
                 # reset Context.instance, so the failure to term doesn't corrupt subsequent tests
-                zmq.core.context._instance = None
+                set_zmq_context_to_none()
                 raise RuntimeError("context could not terminate, open sockets likely remain in test")
 
     def test_agent_rep(self):
@@ -196,7 +204,6 @@ class AgentTest(unittest.TestCase):
 
         proxy._proxy_stop_server()
         proxy._proxy_stop_me()
-
 
     def test_agent_req_agent_rep(self):
 
@@ -352,7 +359,7 @@ class AgentTest(unittest.TestCase):
             def __init__(self_):
                 self_.called = 0
 
-            def __call__(self_, sender, topic, msgid, content):
+            def __call__(self_, sender, topic, content, msgid):
                 self_.called += 1
                 self.assertEqual(sender, endpoint)
                 self.assertEqual(topic, topic1)

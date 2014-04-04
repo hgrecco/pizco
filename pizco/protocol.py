@@ -15,6 +15,7 @@ import uuid
 import hmac
 import json
 import hashlib
+import re
 
 if sys.version_info < (3, 0):
     import cPickle as pickle
@@ -90,8 +91,8 @@ class Protocol(object):
         if header != self.HEADER:
             raise ValueError('Wrong header. In server: {}, received: {}'.format(self.HEADER, header))
 
-        if check_sender and check_sender != sender:
-            raise ValueError('Wrong Sender Sender. Sent: {}, received: {}'.format(check_sender, msgid))
+        if check_sender and check_sender != sender and sender.find("tcp://*") == -1:
+            raise ValueError('Wrong Sender Sender. Sent: {}, received: {}'.format(check_sender, sender))
 
         if check_msgid and check_msgid != msgid:
             raise ValueError('Wrong Message ID. Sent: {}, received: {}'.format(check_msgid, msgid))

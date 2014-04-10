@@ -101,6 +101,10 @@ class Server(Agent):
 
     def __init__(self, served_object, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
                  ctx=None, loop=None):
+
+        if rep_endpoint.find("*"):
+            pub_endpoint = pub_endpoint.replace("127.0.0.1","*")
+
         self.served_object = served_object
         self.signal_calls = {}
         super(Server, self).__init__(rep_endpoint, pub_endpoint, ctx, loop)
@@ -160,7 +164,8 @@ class Server(Agent):
 
             elif action == 'inspect':
                 return PSMessage('return', self.inspect())
-
+            elif action == 'ping':
+                return PSMessage('ping', None)
             elif action == 'instantiate':
                 if self.served_object is not None:
                     return PSMessage('raise', (Exception('Cannot instantiate another object.'),
@@ -222,7 +227,12 @@ class Server(Agent):
                         rep_endpoint, pub_endpoint='tcp://127.0.0.1:0'):
         t = threading.Thread(target=cls, args=(None, rep_endpoint, pub_endpoint))
         t.start()
-        proxy = Proxy(rep_endpoint)
+        import time
+        time.sleep(1)
+        if rep_endpoint.find("*"):
+            pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
+
+        proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy
 
@@ -234,7 +244,9 @@ class Server(Agent):
         launch(cwd, rep_endpoint, pub_endpoint, verbose, gui)
         import time
         time.sleep(1)
-        proxy = Proxy(rep_endpoint)
+        if rep_endpoint.find("*"):
+           pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
+        proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy
 
@@ -282,10 +294,15 @@ class ProxyAgent(Agent):
     :param remote_rep_endpoint: REP endpoint of the Server.
     """
 
-    def __init__(self, remote_rep_endpoint):
+    def __init__(self, remote_rep_endpoint, creation_timeout=0):
         super(ProxyAgent, self).__init__()
 
         self.remote_rep_endpoint = remote_rep_endpoint
+
+        if creation_timeout:
+            if self.ping_server(creation_timeout) != 'ping':
+                raise Exception("Timeout")
+
         ret = self.request(self.remote_rep_endpoint, 'info')
         self.remote_pub_endpoint = ret['pub_endpoint']
 
@@ -297,6 +314,11 @@ class ProxyAgent(Agent):
         #: Subscribe to notifications when a future is finished.
         self.subscribe(self.remote_rep_endpoint, '__future__',
                        self.on_future_completed, self.remote_pub_endpoint)
+
+    def ping_server(self,timeout=5000):
+        return self.request_polled(self.remote_rep_endpoint,"ping",timeout)
+
+
 
     def request_server(self, action, options, force_as_object=False):
         """Sends a request to the associated server using PSMessage
@@ -334,20 +356,31 @@ class ProxyAgent(Agent):
             raise ValueError('Unknown {}'.format(ret_action))
 
     def signal_manager(self, action, signal_name, fun):
+
+        #the remote rep endpoint is ignored in the server sending with it is not possible on multiple threads
+        #TODO : check if its compliant to multiple object
+        #fixing connection with wildcard adresses
+        if self.remote_pub_endpoint.find("*") != -1:
+            defined_endpoint = self.remote_rep_endpoint.replace("/","").split(":")
+            defined_endpoint[1] = "//*"
+            signal_endpoint = ":".join(defined_endpoint)
+        else:
+            signal_endpoint = self.remote_rep_endpoint
+
         if action == 'connect':
-            if not self._signals[(self.remote_rep_endpoint, signal_name)].slots:
+            if not self._signals[(signal_endpoint, signal_name)].slots:
                 self.subscribe(self.remote_rep_endpoint, signal_name, None, self.remote_pub_endpoint)
-            self._signals[(self.remote_rep_endpoint, signal_name)].connect(fun)
+            self._signals[(signal_endpoint, signal_name)].connect(fun)
         elif action == 'disconnect':
-            self._signals[(self.remote_rep_endpoint, signal_name)].disconnect(fun)
-            if not self._signals[(self.remote_rep_endpoint, signal_name)].slots:
+            self._signals[(signal_endpoint, signal_name)].disconnect(fun)
+            if not self._signals[(signal_endpoint, signal_name)].slots:
                 self.unsubscribe(self.remote_rep_endpoint, signal_name, self.remote_pub_endpoint)
         elif action == 'emit':
             #TODO: Emit signal in the server!
             pass
         else:
             raise ValueError(action)
-
+                        
     def on_future_completed(self, sender, topic, content, msgid):
         fut = self._futures[content['msgid']]
         if content['exception']:
@@ -385,13 +418,13 @@ class Proxy(object):
     :param remote_endpoint: endpoint of the server.
     """
 
-    def __init__(self, remote_endpoint):
-        self._proxy_agent = ProxyAgent(remote_endpoint)
+    def __init__(self, remote_endpoint, creation_timeout=0):
+        self._proxy_agent = ProxyAgent(remote_endpoint, creation_timeout=creation_timeout)
         self._proxy_attr_as_remote, self._proxy_attr_as_object = self._proxy_agent.request_server('inspect', {})
         
     def __getattr__(self, item):
         if item.startswith('_proxy_'):
-            return super(Proxy, self).__getattr__(item)
+            return super(Proxy,self).__getattr__(item)
         if item in self._proxy_attr_as_remote:
             return RemoteAttribute(item, self._proxy_agent.request_server, self._proxy_agent.signal_manager)
         return self._proxy_agent.request_server('get', {'name': item}, item in self._proxy_attr_as_object)
@@ -402,7 +435,8 @@ class Proxy(object):
             return
 
         return self._proxy_agent.request_server('setattr', {'name': item, 'value': value})
-
+    def _proxy_ping(self,ping_timeout=3000):
+        return self._proxy_agent.ping_server(ping_timeout)
     def _proxy_stop_server(self):
         self._proxy_agent.request(self._proxy_agent.remote_rep_endpoint, 'stop')
 
@@ -410,4 +444,5 @@ class Proxy(object):
         self._proxy_agent.stop()
 
     def __del__(self):
-        self._proxy_agent.stop()
+        if hasattr(super(Proxy,self),"_proxy_agent"):
+            self._proxy_agent.stop()

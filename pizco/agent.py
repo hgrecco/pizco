@@ -22,7 +22,6 @@ from . import LOGGER
 from .protocol import Protocol
 from .util import bind
 
-
 class AgentManager(object):
 
     agents = weakref.WeakKeyDictionary()
@@ -134,7 +133,6 @@ class Agent(object):
             self._running = True
 
             LOGGER.info('Started agent {}'.format(self.rep_endpoint))
-
     def stop(self):
         """Stop actor unsubscribing from all notification and closing the streams.
         """
@@ -158,6 +156,32 @@ class Agent(object):
 
     def __del__(self):
         self.stop()
+
+    def request_polled(self,recipient,content,timeout=5000):
+        """Send a request to another agent and waits for the response.
+
+        Messages have the following structure (sender name, message id, content)
+        This methods is executed in the calling thread.
+
+        :param recipient: endpoint of the recipient.
+        :param content: content to be sent.
+        :return: The response of recipient.
+        """
+        LOGGER.debug('{} -> {}: {}'.format(self, recipient, content))
+        try:
+            req = self.connections[recipient]
+        except KeyError:
+            req = self.ctx.socket(zmq.REQ)
+            req.connect(recipient)
+            self.connections[recipient] = req
+
+        msgid = req.send_multipart(self.protocol.format(self.rep_endpoint, '', content, None))
+        if req.poll(timeout):
+            sender, topic, content, msgid = self.protocol.parse(req.recv_multipart(), recipient, msgid)
+        else:
+            LOGGER.warning("timeout on {}-{}".format(self.rep_endpoint,content))
+            content = None
+        return content
 
     def request(self, recipient, content):
         """Send a request to another agent and waits for the response.
@@ -230,7 +254,6 @@ class Agent(object):
         This methods must be executed in IOLoop thread.
 
         """
-
         self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
 
     def publish(self, topic, content):
@@ -294,6 +317,7 @@ class Agent(object):
         This methods must be executed in IOLoop thread.
         """
         if endpoint not in self.sub_connections:
+            LOGGER.debug("subscribing to {}".format(endpoint))
             self.sub.connect(endpoint)
             self.sub_connections.add(endpoint)
         self.sub.setsockopt(zmq.SUBSCRIBE, agentid_topic)
@@ -323,6 +347,15 @@ class Agent(object):
         :param callback: a callable with the (sender, topic, content)
         :param pub_endpoint: endpoint of an agent PUB socket, if not given it will be queried.
         """
+        LOGGER.debug((pub_endpoint,rep_endpoint,self.rep_to_pub))
+        #fixing socket connections with wildcard binding
+        if pub_endpoint.find("tcp://*") != -1:
+            defined_endpoint = rep_endpoint.replace("/","").split(":")[1]
+            pub_endpoint = pub_endpoint.replace("*",defined_endpoint)
+            rep_endpoint = rep_endpoint.split(":")
+            rep_endpoint[1] = "//*"
+            rep_endpoint = ":".join(rep_endpoint)
+
         pub_endpoint = pub_endpoint or self.rep_to_pub.get(rep_endpoint, None)
         if not pub_endpoint:
             ret = self.request(rep_endpoint, 'info')
@@ -330,6 +363,7 @@ class Agent(object):
             self.rep_to_pub[rep_endpoint] = pub_endpoint
         elif rep_endpoint not in [rep_endpoint]:
             self.rep_to_pub[rep_endpoint] = pub_endpoint
+
 
         agentid_topic  = self.protocol.format(rep_endpoint, topic, just_header=True)
         LOGGER.debug('Subscribing to {} with {}'.format(agentid_topic, callback))
@@ -346,6 +380,12 @@ class Agent(object):
         :param topic: a string with the topic to subscribe.
         :param pub_endpoint: endpoint of an agent PUB socket, if not given it will be queried.
         """
+        #fixing binding to all addresses with wildcards
+        if self.remote_pub_endpoint.find("*") != -1:
+            defined_endpoint = self.remote_rep_endpoint.replace("/","").split(":")
+            defined_endpoint[1] = "//*"
+            rep_endpoint = ":".join(defined_endpoint)
+
         pub_endpoint = pub_endpoint or self.rep_to_pub.get(rep_endpoint, None)
         if not pub_endpoint:
             ret = self.request(rep_endpoint, 'info')
@@ -365,6 +405,7 @@ class Agent(object):
         """
         try:
             sender, topic, content, msgid = self.protocol.parse(message)
+            LOGGER.debug(("RECEIVE notification : ",sender,topic))
         except:
             LOGGER.debug('Invalid message {}'.format(message))
         else:

@@ -31,8 +31,7 @@ class Signal(object):
     def emit(self, *args):
         #thread safety in qt main loop maybe pyqtSignals should be called behind
         for slot in self.slots:
-            argcount = slot.__code__.co_argcount
-            slot(*args[:argcount-1])
+            slot(*args)
 
 def bind(sock, endpoint='tcp://127.0.0.1:0'):
     """Bind socket to endpoint accepting a variety of endpoint formats.

@@ -8,17 +8,17 @@
     :copyright: 2013 by Hernan E. Grecco, see AUTHORS for more details.
     :license: BSD, see LICENSE for more details.
 """
-
+import inspect
 
 class Signal(object):
     """PyQt like signal object
     """
+    # TODO reflexion on thread safety and resync with qt main loop, like embedding a pyqtSignal in Signal
+    # Especially in server part, where async operation are not well understood
     def __init__(self):
-        #add dummy types for signals or hide a pyqtSignal behind to resync with qt main loop
         self.slots = []
 
     def connect(self, slot):
-        #add dummy connection type maybe this the place to create the pyqtSignals to be able to resync with qt event loop
         if slot not in self.slots:
             self.slots.append(slot)
 
@@ -29,10 +29,9 @@ class Signal(object):
             self.slots.remove(slot)
 
     def emit(self, *args):
-        #thread safety in qt main loop maybe pyqtSignals should be called behind
         for slot in self.slots:
-            argcount = slot.__code__.co_argcount
-            slot(*args[:argcount-1])
+            argcount = len(inspect.getargspec(slot).args)
+            slot(*args[:argcount])
 
 def bind(sock, endpoint='tcp://127.0.0.1:0'):
     """Bind socket to endpoint accepting a variety of endpoint formats.

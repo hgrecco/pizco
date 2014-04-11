@@ -15,7 +15,6 @@ import uuid
 import hmac
 import json
 import hashlib
-import re
 
 if sys.version_info < (3, 0):
     import cPickle as pickle
@@ -92,6 +91,7 @@ class Protocol(object):
             raise ValueError('Wrong header. In server: {}, received: {}'.format(self.HEADER, header))
 
         if check_sender and check_sender != sender and sender.find("tcp://*") == -1:
+            #todo verify port also
             raise ValueError('Wrong Sender Sender. Sent: {}, received: {}'.format(check_sender, sender))
 
         if check_msgid and check_msgid != msgid:
@@ -132,6 +132,9 @@ class Protocol(object):
             else:
                 raise ValueError('Unknown serializer {}'.format(serializer))
         except Exception as ex:
+            print topic
+            print sender
+            print content
             raise ValueError('Could not serialize content with {}'.format(ex))
 
         if just_header:

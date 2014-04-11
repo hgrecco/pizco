@@ -21,6 +21,8 @@ from . import LOGGER, launch
 from .util import Signal
 from .agent import Agent
 
+from multiprocessing import process
+
 if sys.version_info < (3, 2):
     import futures
 else:
@@ -107,8 +109,10 @@ class Server(Agent):
 
         self.served_object = served_object
         self.signal_calls = {}
+        LOGGER.debug("creating")
         super(Server, self).__init__(rep_endpoint, pub_endpoint, ctx, loop)
-
+        LOGGER.debug("done creating")
+        
     def on_request(self, sender, topic, content, msgid):
         """Handles Proxy Server communication, handling attribute access in served_object.
 
@@ -174,6 +178,7 @@ class Server(Agent):
                 mod_name, class_name = options['class'].rsplit('.', 1)
                 mod = __import__(mod_name, fromlist=[class_name])
                 klass = getattr(mod, class_name)
+                self.did_instantiate = True
                 self.served_object = klass(*options['args'], **options['kwargs'])
                 return PSMessage('return', None)
             else:
@@ -236,12 +241,15 @@ class Server(Agent):
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy
 
+    
     @classmethod
     def serve_in_process(cls, served_cls, args, kwargs,
                          rep_endpoint, pub_endpoint='tcp://127.0.0.1:0',
                          verbose=False, gui=False):
-        cwd = os.path.dirname(inspect.getfile(served_cls))
-        launch(cwd, rep_endpoint, pub_endpoint, verbose, gui)
+        #cwd = os.path.dirname(inspect.getfile(served_cls))
+        #launch(cwd, rep_endpoint, pub_endpoint, verbose, gui)
+        p = Process(target=cls, args=(None, rep_endpoint, pub_endpoint))
+        p.start()
         import time
         time.sleep(1)
         if rep_endpoint.find("*"):

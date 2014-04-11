@@ -9,6 +9,7 @@
     :license: BSD, see LICENSE for more details.
 """
 import inspect
+import traceback
 
 class Signal(object):
     """PyQt like signal object

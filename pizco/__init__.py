@@ -107,7 +107,8 @@ def launch(cwd, rep_endpoint, pub_endpoint, verbose=True, gui=False):
     o['gui'] = '-g' if gui else ''
 
     cmd = launcher.format(o)
-
+    print cmd
+    print cwd
     subprocess.Popen(cmd, cwd=cwd, shell=True)
 
 

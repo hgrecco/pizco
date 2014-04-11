@@ -37,7 +37,6 @@ class PeerWatcher(Thread):
         self._exit_e = Event()
         self._job_e = Event()
         self._job_e.set()
-        self._init_beacon()
 
         self._periodicity = 0.2
         self._heartbeat = 0
@@ -47,8 +46,9 @@ class PeerWatcher(Thread):
         if local_only:
             self._job_e.clear()
             self._exit_e.clear()
+            
     def run(self):
-        exec_time = 0
+        self._init_beacon()
         while not self._exit_e.isSet():
             if self._job_e.isSet():
                 start_time = time.time()
@@ -56,6 +56,8 @@ class PeerWatcher(Thread):
                 exec_time = time.time()-start_time
             if self._exit_e.wait(self._periodicity-exec_time):
                 break
+        self.sig_peer_event.disconnect()
+        self._end_beacon()
 
     def do_job(self):
         self._heartbeat+=1
@@ -66,9 +68,11 @@ class PeerWatcher(Thread):
             self._life_job()
 
     def stop(self):
+        LOGGER.debug("stopping peer watcher")
         self._job_e.clear()
         self._exit_e.set()
-        self.join(self._periodicity*2)
+        self.join()#self._periodicity*3
+        LOGGER.debug("done stopping peers watcher")
 
     def _init_beacon(self):
         # Create UDP socket
@@ -89,12 +93,15 @@ class PeerWatcher(Thread):
         self._poller = poller
         self.ping_at = time.time()
         LOGGER.debug("ping watcher started")
-
-    def __del__(self):
+    
+    def _end_beacon(self):
         if hasattr(self,"_sock"):
             self._sock.close()
-            self._sock = None
-            self._poller = None
+            del self._sock
+            del self._poller
+
+    def __del__(self):
+        self.stop()
 
     def _beacon_receive_job(self):
         #dure au moins 1 seconde si des reponses dure moins de temps
@@ -128,6 +135,10 @@ class PeerWatcher(Thread):
             self.peers_list.pop(k)
 
     def on_peer_event(self,addrinfo):
+        t = Thread(target=self.delayed_peer_event,args=(addrinfo,),name="event-loop-peer-event")
+        t.start()
+        
+    def delayed_peer_event(self,addrinfo):
         LOGGER.debug(self.peers_list)
         if self.peers_list.has_key(addrinfo):
             if self.peers_list[addrinfo] < self.PEER_LIFES_AT_START:
@@ -173,10 +184,13 @@ class ServicesWatcher(Thread):
         self._periodicity = 3
         self._heartbeat = 0
         self._local_proxies = {}
-        self.sig_service_death.connect(self.unregister_local_proxy)
         self._sl_lock = Lock()
         LOGGER.debug("service watcher started")
+    def __del__(self):
+        self.stop()
+        
     def run(self):
+        print "starting run"
         exec_time = 0
         while not self._exit_e.isSet():
             if self._job_e.isSet():
@@ -185,19 +199,29 @@ class ServicesWatcher(Thread):
                 exec_time = time.time()-start_time
             if self._exit_e.wait(self._periodicity-exec_time):
                 break
+        self.end_watch()
+        print "end main loop"
+    def end_watch(self):
+        pass
+        #for k,v in self._local_proxies.iteritems():
+        #   v._proxy_stop_me()
+                
     def do_job(self):
         self._heartbeat+=1
         self._local_services_ping_job()
+        
     def stop(self):
+        LOGGER.debug("stopping service watcher")
+        self.sig_service_death.disconnect()
         self._job_e.clear()
         self._exit_e.set()
-        self.join(self._periodicity*2)
-        for v in self._local_proxies.iterkeys():
-            v.local_proxies._proxy_stop_me()
+        self.join() # wont work if peer periodicity is self._periodicity*5
+        LOGGER.debug("done stopping service watcher")
 
     def register_local_proxy(self,servicename,endpoint):
         LOGGER.debug("register proxy in separate thread")
-        t = Thread(target=self.delayed_register,args=(servicename,endpoint),group=None)
+        #self.delayed_register(servicename,endpoint)
+        t = Thread(target=self.delayed_register,args=(servicename,endpoint),name="eventloop-local-proxy")
         t.start()
 
     def delayed_register(self,servicename,endpoint):
@@ -206,7 +230,7 @@ class ServicesWatcher(Thread):
         with self._sl_lock:
             if servicename not in self._local_proxies:
                 try:
-                    self._local_proxies[servicename] = Proxy(endpoint,1000)
+                    self._local_proxies[servicename] = Proxy(endpoint,2000)
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
@@ -226,10 +250,12 @@ class ServicesWatcher(Thread):
                 else:
                     death_list.append(k)
         for service in death_list:
+            self.unregister_local_proxy(service)
             self.sig_service_death.emit(service)
+            
     def unregister_local_proxy(self,service_name):
         with self._sl_lock:
-            self._local_proxies[service_name]._proxy_stop_me()
+            #self._local_proxies[service_name]._proxy_stop_me()
             self._local_proxies.pop(service_name)
 
 class Naming(object):
@@ -266,9 +292,12 @@ class Naming(object):
         self._sig_unregister_local_service.connect(self._swatcher.unregister_local_proxy)
         self._swatcher.start()
 
-    def __del__(self):
+    def stop(self):
         self._swatcher.stop()
         self._pwatcher.stop()
+        
+    def __del__(self):
+        self.stop()
 
     @staticmethod
     def start_naming_service(in_process=True, local_only=False):
@@ -312,11 +341,13 @@ class Naming(object):
             
 
     def _make_remote_services_slot(self,addrinfo):
-        def remote_services_slot(services):
-            self._sig_remote_services.emit(addrinfo, services)
+        def remote_services_slot(type, services):
+            address = addrinfo
+            self._on_remote_services(address, type, services)
         return remote_services_slot
 
     def on_peer_birth(self,addrinfo):
+        import functools
         if not self.peer_proxies.has_key(addrinfo):
             LOGGER.debug(addrinfo)
             try:
@@ -325,19 +356,28 @@ class Naming(object):
                 LOGGER.error("no naming service present at ",addrinfo, self.NAMING_SERVICE_PORT)
             else:
                 self.peer_proxies[addrinfo] = rn_service
-                self.peer_slots[addrinfo] = self._make_remote_services_slot(addrinfo)
-                rn_service.sig_exportable_services.connect(self.peer_slots[addrinfo])
-            #update services from peer on promotion
+                custom_slot = self._make_remote_services_slot(addrinfo)
                 try:
-                    rn_service.get_exportable_services()
+                    services = rn_service.get_exportable_services()
+                    self._on_remote_services(addrinfo,"birth",services)
+                    rn_service.sig_exportable_services.connect(custom_slot)
                 except:
                     import traceback
                     traceback.print_exc()
+                    
 
-    def _on_remote_services(self, addrinfo, rservices):
-        for name,port in rservices.iteritems():
-            self.remote_services[name]=  "tcp://{}:{}".format(addrinfo,port.split(":")[-1])
 
+    def _on_remote_services(self, addrinfo, type, rservices):
+        with self._serviceslock:
+            if type == "birth":
+                for name,port in rservices.iteritems():
+                    self.remote_services[name]=  "tcp://{}:{}".format(addrinfo,port.split(":")[-1])
+            elif type == "death":
+                for name,port in rservices.iteritems():
+                    if self.remote_services.has_key(name):
+                        self.remote_services.pop(name)
+            
+            
     def get_endpoint(self,servicename):
         return self.get_services()[servicename]
 
@@ -353,9 +393,7 @@ class Naming(object):
             return z
 
     def get_exportable_services(self):
-        with self._serviceslock:
-            self.sig_exportable_services.emit(self.exportable_local_services)
-            return self.exportable_local_services
+        return self.exportable_local_services
 
     def register_local_service(self,service_name,endpoint):
         with self._serviceslock:
@@ -364,16 +402,17 @@ class Naming(object):
                 #ok only if the service is the local service not the proxy
                 if endpoint.find("*") != -1:
                     endpoint = endpoint.replace("*","127.0.0.1")
-                    self.exportable_local_services[service_name] = endpoint
                     self.local_services[service_name] = endpoint
-                    self.sig_exportable_services.emit(self.exportable_local_services)
+                    if service_name != "pizconaming":
+                        self.exportable_local_services[service_name] = endpoint
+                        self.sig_exportable_services.emit("birth",self.exportable_local_services.copy())
                 elif endpoint.find("127.0.0.1") == -1:
                     #remote only managed service
                     self.exportable_local_services[service_name] = endpoint
-                    self.sig_exportable_services.emit(self.exportable_local_services)
+                    if service_name != "pizconaming":
+                        self.sig_exportable_services.emit("birth",self.exportable_local_services.copy())
                 else:
                     self.local_services[service_name] = endpoint
-                ##emit local service
                 self._sig_register_local_service.emit(service_name, endpoint)
             except:
                 import traceback
@@ -389,13 +428,14 @@ class Naming(object):
             self.local_services.pop(service_name)
         if self.exportable_local_services.has_key(service_name):
             self.exportable_local_services.pop(service_name)
+            self.sig_exportable_services.emit("death",{service_name:"now dead"})
         #remote local has the service name
         if self.remote_services.has_key(service_name):
             self.remote_services.pop(service_name)
-        self.sig_exportable_services.emit(self.exportable_local_services)
-
+        
     def test_peer_death(self):
         self._pwatcher.sig_peer_event.disconnect()
+        
     def test_peer_death_end(self):
         self._pwatcher.sig_peer_event.connect(self._pwatcher.on_peer_event)
 
@@ -418,14 +458,18 @@ class NamingTestObject(object):
 
 import unittest
 import logging
+perform_test_in_process = True
+test_log_level = logging.ERROR
+
 class TestNamingService(unittest.TestCase):
     def testPeerWatcher(self):
-        LOGGER.setLevel(logging.DEBUG)
+        print "##############PEER WATCHER CLASS TEST###############"
+        print "##"
+        LOGGER.setLevel(test_log_level)
         if PeerWatcher.check_beacon_port() == False:
             print "trying to stop naming service"
-            ns = Naming.start_naming_service()
+            ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()
-            ns._proxy_stop_me()
             time.sleep(1)
             print PeerWatcher.check_beacon_port()
         pw = PeerWatcher()
@@ -435,12 +479,18 @@ class TestNamingService(unittest.TestCase):
         time.sleep(2.5)
         print pw.peers_list
         pw.stop()
+        time.sleep(2.5)
+        
     def testServiceWatcher(self):
-        LOGGER.setLevel(logging.DEBUG)
+        print "##############SERVICE WATCHER CLASS TEST###############"
+        print "##"
+        LOGGER.setLevel(test_log_level)
         if PeerWatcher.check_beacon_port() == False:
             print "trying to stop naming service"
-            ns = Naming.start_naming_service()
+            ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()
+            time.sleep(1)
+            print PeerWatcher.check_beacon_port()            
         #watch for non responding services
         sw = ServicesWatcher()
         ns = NamingTestObject()
@@ -450,7 +500,7 @@ class TestNamingService(unittest.TestCase):
         sw.start()
         to = TestObject()
         s = Server(to,rep_endpoint="tcp://*:500")
-        time.sleep(1)
+        time.sleep(4)
         ns._sig_register_local_service.emit("myremote","tcp://*:500")
         print sw._local_proxies
         time.sleep(5)
@@ -458,14 +508,19 @@ class TestNamingService(unittest.TestCase):
         time.sleep(5)
         print sw._local_proxies
         sw.stop()
+        time.sleep(2.5)
+        
     def testNormalCaseServiceDeath(self):
-        LOGGER.setLevel(logging.DEBUG)
-        ns = Naming.start_naming_service()
+        print "##############NORMAL CASE SERVICE DEATH TEST###############"
+        print "##"    
+        LOGGER.setLevel(test_log_level)
+        ns = Naming.start_naming_service(in_process=perform_test_in_process)
         self.assertNotEqual(ns, None)
         time.sleep(1)
         #local_pxy = Proxy("tcp://127.0.0.1:5777",300)
         to = TestObject()
         s = Server(to,rep_endpoint="tcp://*:500")
+        time.sleep(1)
         ns.register_local_service("myremote","tcp://*:500")
         time.sleep(4)
         print "N disconnect"
@@ -478,13 +533,19 @@ class TestNamingService(unittest.TestCase):
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+5)) #ping standard time
         self.assertEqual(ns.get_services(), {'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(1)
+        ns._proxy_stop_server()
         ns._proxy_stop_me()
+        time.sleep(2.5)
+        
     def testNormalCase(self):
-        LOGGER.setLevel(logging.DEBUG)
-        ns = Naming.start_naming_service()
+        print "##############NORMAL CASE SERVICE DEATH TEST###############"
+        print "##"        
+        LOGGER.setLevel(test_log_level)
+        ns = Naming.start_naming_service(in_process=perform_test_in_process)
         self.assertNotEqual(ns, None)
         to = TestObject()
         s = Server(to,rep_endpoint="tcp://*:500")
+        time.sleep(1)
         ns.register_local_service("myremote","tcp://*:500")
         addproxy = Proxy(ns.get_endpoint("myremote"),100)
         self.assertEqual(addproxy.times(50),50)
@@ -492,7 +553,10 @@ class TestNamingService(unittest.TestCase):
         self.assertEqual(ns.get_services(), {'myremote': 'tcp://127.0.0.1:500', 'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(1)
         s.stop()
+        ns._proxy_stop_server()
         ns._proxy_stop_me()
+        time.sleep(2.5)
+        
 
 if __name__ == "__main__":
     LOGGER.setLevel(logging.DEBUG)

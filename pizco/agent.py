@@ -48,12 +48,14 @@ class AgentManager(object):
         if not cls.agents[loop] and loop in cls.in_use:
             cls.in_use.remove(loop)
             loop.add_callback(lambda: loop.stop)
+            cls.join(agent)
 
     @classmethod
     def join(cls, agent):
         try:
             while cls.threads[agent.loop].isAlive():
-                cls.threads[agent.loop].join(1)
+                ret = cls.threads[agent.loop].join(4)
+                LOGGER.debug("stopping thread {}".format(ret))
         except (KeyboardInterrupt, SystemExit):
             return
 
@@ -143,16 +145,26 @@ class Agent(object):
         #for (endpoint, topic) in list(self.notifications_callbacks.keys()):
         #    self.unsubscribe(endpoint, topic)
 
+        if hasattr(self,'did_instantiate'):
+            self.loop.add_callback(self.clean_instance)
+        
         for stream in (self.rep, self.pub, self.sub):
             self.loop.add_callback(lambda: stream.on_recv(None))
             self.loop.add_callback(stream.flush)
             self.loop.add_callback(stream.close)
         for sock in self.connections.values():
             self.loop.add_callback(sock.close)
+            
         self.connections = {}
         AgentManager.remove(self)
         self._running = False
         LOGGER.info('Stopped agent {}'.format(self.rep_endpoint))
+        
+    def clean_instance(self):
+        LOGGER.info('cleaning served object')
+        if hasattr(self.served_object,"stop"):
+            self.served_object.stop()
+        del self.served_object
 
     def __del__(self):
         self.stop()
@@ -254,6 +266,10 @@ class Agent(object):
         This methods must be executed in IOLoop thread.
 
         """
+        #TODO check issues in loop after restarting not connected
+        print topic
+        print content
+        print self.rep_endpoint
         self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
 
     def publish(self, topic, content):
@@ -369,6 +385,8 @@ class Agent(object):
         LOGGER.debug('Subscribing to {} with {}'.format(agentid_topic, callback))
         self.loop.add_callback(lambda: self._subscribe(pub_endpoint, agentid_topic))
         self.notifications_callbacks[(rep_endpoint, topic)] = callback
+        
+        
 
     def unsubscribe(self, rep_endpoint, topic, pub_endpoint=None):
         """Thread safe unsubscribe to a topic at endpoint and assign a callback
@@ -396,6 +414,7 @@ class Agent(object):
         LOGGER.debug('Unsubscribing to {}'.format(agentid_topic))
         self.loop.add_callback(lambda: self._unsubscribe(pub_endpoint, agentid_topic))
         del self.notifications_callbacks[(rep_endpoint, topic)]
+       
 
     def _on_notification(self, stream, message):
         """Handles incoming messages in the SUB socket dispatching to a callback if provided or

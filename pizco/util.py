@@ -31,6 +31,11 @@ class Signal(object):
 
     def emit(self, *args):
         for slot in self.slots:
+            spec = inspect.getargspec(slot)
+            if spec.varargs is None:
+                slot(*args[:len(spec.args)])
+            else:
+                slot(*args)
             argcount = len(inspect.getargspec(slot).args)
             slot(*args[:argcount])
 

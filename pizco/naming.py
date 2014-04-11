@@ -459,7 +459,7 @@ class NamingTestObject(object):
 import unittest
 import logging
 perform_test_in_process = True
-test_log_level = logging.ERROR
+test_log_level = logging.DEBUG
 
 class TestNamingService(unittest.TestCase):
     def testPeerWatcher(self):

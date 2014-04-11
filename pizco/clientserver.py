@@ -21,7 +21,10 @@ from . import LOGGER, launch
 from .util import Signal
 from .agent import Agent
 
-from multiprocessing import process
+from multiprocessing import Process
+import multiprocessing, logging
+logger = multiprocessing.log_to_stderr()
+logger.setLevel(multiprocessing.SUBDEBUG)
 
 if sys.version_info < (3, 2):
     import futures
@@ -92,6 +95,11 @@ def PSMessage(action, options):
     return 'PSMessage', action, options
 
 
+def ServerLauncher(*args):
+    s = Server(*args)
+    s.serve_forever()
+    
+    
 class Server(Agent):
     """Serves an object for remote access from a Proxy. A Server can serve a single object.
 
@@ -103,16 +111,17 @@ class Server(Agent):
 
     def __init__(self, served_object, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
                  ctx=None, loop=None):
+        try:
+            LOGGER.debug("test server")
+            if rep_endpoint.find("*"):
+                pub_endpoint = pub_endpoint.replace("127.0.0.1","*")
+            self.served_object = served_object
+            self.signal_calls = {}
+            super(Server, self).__init__(rep_endpoint, pub_endpoint, ctx, loop)
+        except:
+            import traceback
+            LOGGER.error(traceback.format_exc())
 
-        if rep_endpoint.find("*"):
-            pub_endpoint = pub_endpoint.replace("127.0.0.1","*")
-
-        self.served_object = served_object
-        self.signal_calls = {}
-        LOGGER.debug("creating")
-        super(Server, self).__init__(rep_endpoint, pub_endpoint, ctx, loop)
-        LOGGER.debug("done creating")
-        
     def on_request(self, sender, topic, content, msgid):
         """Handles Proxy Server communication, handling attribute access in served_object.
 
@@ -236,27 +245,29 @@ class Server(Agent):
         time.sleep(1)
         if rep_endpoint.find("*"):
             pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
-
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy
 
-    
     @classmethod
     def serve_in_process(cls, served_cls, args, kwargs,
                          rep_endpoint, pub_endpoint='tcp://127.0.0.1:0',
                          verbose=False, gui=False):
         #cwd = os.path.dirname(inspect.getfile(served_cls))
         #launch(cwd, rep_endpoint, pub_endpoint, verbose, gui)
-        p = Process(target=cls, args=(None, rep_endpoint, pub_endpoint))
+        p = Process(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint))
+        p.daemon = True
         p.start()
+       
         import time
-        time.sleep(1)
+        time.sleep(2)
+        print "process"
         if rep_endpoint.find("*"):
            pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy
+
 
     def serve_forever(self):
         self.join()

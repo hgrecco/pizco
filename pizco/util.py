@@ -10,6 +10,7 @@
 """
 import inspect
 import traceback
+from zmq import ZMQError
 
 class Signal(object):
     """PyQt like signal object
@@ -21,6 +22,7 @@ class Signal(object):
 
     def connect(self, slot):
         if slot not in self.slots:
+            spec = inspect.getargspec(slot)
             self.slots.append(slot)
 
     def disconnect(self, slot=None):
@@ -31,13 +33,25 @@ class Signal(object):
 
     def emit(self, *args):
         for slot in self.slots:
+            #from functools import partial
             spec = inspect.getargspec(slot)
+            #pcbk = partial(slot,*args)
+            #print spec
+            #print args
+            print slot
+            #print type(slot)
+            #print len(args)
+            #print len(spec.args)
             if spec.varargs is None:
-                slot(*args[:len(spec.args)])
+                if inspect.ismethod(slot):
+                    if len(args) >= len(spec.args):
+                        slot(*args[1:len(spec.args)])
+                    else:
+                        slot(*args[:len(spec.args)])
+                else:
+                    slot(*args[:len(spec.args)])
             else:
                 slot(*args)
-            argcount = len(inspect.getargspec(slot).args)
-            slot(*args[:argcount])
 
 def bind(sock, endpoint='tcp://127.0.0.1:0'):
     """Bind socket to endpoint accepting a variety of endpoint formats.
@@ -62,6 +76,13 @@ def bind(sock, endpoint='tcp://127.0.0.1:0'):
         port = sock.bind_to_random_port(endpoint)
         endpoint += ':' + str(port)
     else:
-        sock.bind(endpoint)
+        try:
+            sock.bind(endpoint)
+        except Exception as e:
+            from . import LOGGER
+            import traceback
+            LOGGER.error("connecting endpoint {} : ".format(endpoint))
+            LOGGER.error(traceback.format_exc())
+            raise e
 
     return endpoint

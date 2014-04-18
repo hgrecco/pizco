@@ -113,7 +113,7 @@ class Server(Agent):
                  ctx=None, loop=None):
         try:
             LOGGER.debug("test server")
-            if rep_endpoint.find("*"):
+            if rep_endpoint.find("*") != -1:
                 pub_endpoint = pub_endpoint.replace("127.0.0.1","*")
             self.served_object = served_object
             self.signal_calls = {}
@@ -243,7 +243,7 @@ class Server(Agent):
         t.start()
         import time
         time.sleep(1)
-        if rep_endpoint.find("*"):
+        if rep_endpoint.find("*") != -1:
             pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
@@ -260,9 +260,8 @@ class Server(Agent):
         p.start()
        
         import time
-        time.sleep(2)
-        print "process"
-        if rep_endpoint.find("*"):
+        time.sleep(1)
+        if rep_endpoint.find("*") != -1:
            pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)

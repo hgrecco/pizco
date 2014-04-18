@@ -47,15 +47,21 @@ class AgentManager(object):
         cls.agents[loop].remove(agent)
         if not cls.agents[loop] and loop in cls.in_use:
             cls.in_use.remove(loop)
-            loop.add_callback(lambda: loop.stop)
+            loop.add_callback(lambda: loop.close)
             cls.join(agent)
+
 
     @classmethod
     def join(cls, agent):
         try:
-            while cls.threads[agent.loop].isAlive():
-                ret = cls.threads[agent.loop].join(4)
-                LOGGER.debug("stopping thread {}".format(ret))
+            #while cls.threads[agent.loop].isAlive():
+            LOGGER.debug("trying to join")
+            ret = cls.threads[agent.loop].join(5000)
+            if ret == None:
+                LOGGER.error("timeout")
+            else:
+                LOGGER.info("ended up with ret", ret)
+            LOGGER.debug("stopping thread {}".format(ret))
         except (KeyboardInterrupt, SystemExit):
             return
 
@@ -135,12 +141,15 @@ class Agent(object):
             self._running = True
 
             LOGGER.info('Started agent {}'.format(self.rep_endpoint))
+
     def stop(self):
         """Stop actor unsubscribing from all notification and closing the streams.
         """
+        LOGGER.debug("starting stopping")
         if not getattr(self, '_running', False):
             return
 
+        LOGGER.debug("stopping actor")
         #self.publish('__status__', 'stop')
         #for (endpoint, topic) in list(self.notifications_callbacks.keys()):
         #    self.unsubscribe(endpoint, topic)
@@ -154,11 +163,12 @@ class Agent(object):
             self.loop.add_callback(stream.close)
         for sock in self.connections.values():
             self.loop.add_callback(sock.close)
-            
+
+        self.loop.add_callback(lambda: LOGGER.info("loop empty"))
         self.connections = {}
         AgentManager.remove(self)
         self._running = False
-        LOGGER.info('Stopped agent {}'.format(self.rep_endpoint))
+        LOGGER.info('Stopped agent {} in loop'.format(self.rep_endpoint))
         
     def clean_instance(self):
         LOGGER.info('cleaning served object')
@@ -267,9 +277,13 @@ class Agent(object):
 
         """
         #TODO check issues in loop after restarting not connected
-        print topic
-        print content
-        print self.rep_endpoint
+        #print topic
+        #print content
+        #print self.rep_endpoint
+        #print dir(self.pub)
+        #print type(self)
+        #if self.pub.closed():
+        #    print "closed socket send"
         self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
 
     def publish(self, topic, content):
@@ -365,7 +379,7 @@ class Agent(object):
         """
         LOGGER.debug((pub_endpoint,rep_endpoint,self.rep_to_pub))
         #fixing socket connections with wildcard binding
-        if pub_endpoint.find("tcp://*") != -1:
+        if pub_endpoint.startswith("tcp://*"):
             defined_endpoint = rep_endpoint.replace("/","").split(":")[1]
             pub_endpoint = pub_endpoint.replace("*",defined_endpoint)
             rep_endpoint = rep_endpoint.split(":")

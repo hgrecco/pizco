@@ -244,7 +244,8 @@ class ServicesWatcher(Thread):
     def register_local_proxy(self,servicename, endpoint):
         LOGGER.debug("register proxy in event loop")
         evtcbck = partial(self.delayed_register_local_proxy,servicename=servicename,endpoint=endpoint)
-
+        self._events.put(evtcbck)
+        
     def delayed_register_local_proxy(self,servicename,endpoint):
         LOGGER.debug(("registering local proxy",servicename,endpoint))
         endpoint = endpoint.replace("*","127.0.0.1")
@@ -530,7 +531,7 @@ class NamingTestObject(object):
 
 import unittest
 import logging
-perform_test_in_process = True
+perform_test_in_process = False
 test_log_level = logging.DEBUG
 
 class TestNamingService(unittest.TestCase):
@@ -604,6 +605,7 @@ class TestNamingService(unittest.TestCase):
         ns.test_peer_death_end()
         print "simulation of server object crash"
         s.stop()
+        time.sleep(10)
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+5)) #ping standard time
         self.assertEqual(ns.get_services(), {'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(1)

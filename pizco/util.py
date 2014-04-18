@@ -38,7 +38,7 @@ class Signal(object):
             #pcbk = partial(slot,*args)
             #print spec
             #print args
-            print slot
+            #print slot
             #print type(slot)
             #print len(args)
             #print len(spec.args)

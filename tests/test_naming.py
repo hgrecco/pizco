@@ -6,7 +6,7 @@ if __name__ == "__main__":
     unittest.main()
     #unittest.main("pizco.naming","TestNamingService.testServiceWatcher")
     #unittest.main("pizco.naming","TestNamingService.testProcessWatcher")
-    unittest.main("pizco.naming","TestNamingService.testNormalCase")
+    #unittest.main("pizco.naming","TestNamingService.testNormalCase")
     unittest.main("pizco.naming","TestNamingService.testNormalCaseServiceDeath")
 
 

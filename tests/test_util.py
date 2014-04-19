@@ -15,7 +15,7 @@ class MockSocket(object):
 
 class Example(object):
     def __init__(self):
-        self.signal = Signal()
+        self.signal = Signal(varargs=True)
 
     def emit(self, *args):
         self.signal.emit(*args)

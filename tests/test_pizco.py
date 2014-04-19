@@ -58,8 +58,8 @@ class Example(object):
         self._rw_prop = 42
         self._ro_prop = 42
         self._wo_prop = 42
-        self.rw_prop_changed = Signal()
-        self.wo_prop_changed = Signal()
+        self.rw_prop_changed = Signal(nargs=1)
+        self.wo_prop_changed = Signal(nargs=1)
 
 
     @property

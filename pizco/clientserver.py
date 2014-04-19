@@ -80,8 +80,11 @@ class RemoteAttribute(object):
     def disconnect(self, fun):
         self.signal_manager('disconnect', self.name, fun)
 
-    def emit(self, value, old_value, other):
-        self.signal_manager('emit', self.name, (value, old_value, other))
+    #def emit(self, value, old_value, other):
+    #    self.signal_manager('emit', self.name, (value, old_value, other))
+
+    def emit(self, *args, **kwargs):
+        self.signal_manager('emit', self.name, (args, kwargs))
 
 
 def PSMessage(action, options):
@@ -189,9 +192,13 @@ class Server(Agent):
             tb = traceback.format_exception(exc_type, exc_value, exc_tb)[1:]
             return PSMessage('raise', (ex, tb))
 
-    def emit(self, topic, value, old_value, other):
-        LOGGER.debug('Emitting {}, {}, {}, {}'.format(topic, value, old_value, other))
-        self.publish(topic, (value, old_value, other))
+    #def emit(self, topic, value, old_value, other):
+    #    LOGGER.debug('Emitting {}, {}, {}, {}'.format(topic, value, old_value, other))
+    #    self.publish(topic, (value, old_value, other))
+
+    def emit(self, topic, *args, **kwargs):
+        LOGGER.debug('Emitting {}, {}, {}'.format(topic, args, kwargs))
+        self.publish(topic, (args, kwargs))
 
     def on_subscribe(self, topic, count):
         try:
@@ -201,9 +208,13 @@ class Server(Agent):
 
         if count == 1:
             LOGGER.debug('Connecting {} signal on server'.format(topic))
-            def fun(value, old_value=None, other=None):
+            #def fun(value, old_value=None, other=None):
+            #    LOGGER.debug('ready to emit')
+            #    self.emit(topic, value, old_value, other)
+
+            def fun(*args, **kwargs):
                 LOGGER.debug('ready to emit')
-                self.emit(topic, value, old_value, other)
+                self.emit(topic, *args, **kwargs)
             self.signal_calls[topic] = fun
             signal.connect(self.signal_calls[topic])
 

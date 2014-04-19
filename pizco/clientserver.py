@@ -302,6 +302,8 @@ class ProxyAgent(Agent):
 
         LOGGER.debug('Started Proxy pointing to REP: {} and PUB: {}'.format(self.remote_rep_endpoint, self.remote_pub_endpoint))
         self._signals = defaultdict(Signal)
+        # TODO how to inspect remote signal to get spec
+
 
         #: Maps msgid to future object.
         self._futures = {}

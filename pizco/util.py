@@ -16,14 +16,32 @@ class SignalError(Exception):
     pass
 
 
+def specable(f):
+    try:
+        inspect.getargspec(f)
+        return True
+    except:
+        return False
+
+
 def getspec(f):
-    spec = inspect.getargspec(f)
-    defaults = []
-    if spec.defaults is not None:
-        defaults = spec.defaults
-    return inspect.ArgSpec(
-        spec.args, spec.varargs is not None,
-        spec.keywords is not None, defaults)
+    # TODO handle callable objects and partials
+    if specable(f):
+        spec = inspect.getargspec(f)
+        defaults = []
+        if spec.defaults is not None:
+            defaults = spec.defaults
+        return inspect.ArgSpec(
+            spec.args, spec.varargs is not None,
+            spec.keywords is not None, defaults)
+    if hasattr(f, '__call__') and specable(f.__call__):
+        spec = getspec(f.__call__)
+        args = spec.args[1:]  # remove reference to self
+        return inspect.ArgSpec(
+            args, spec.varargs, spec.keywords, spec.defaults)
+    raise ValueError(
+        "getspec doesn't know how to get function spec from type {}".format(
+            type(f)))
 
 
 class Signal(object):

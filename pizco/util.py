@@ -25,7 +25,6 @@ def specable(f):
 
 
 def getspec(f):
-    # TODO handle callable objects and partials
     if specable(f):
         spec = inspect.getargspec(f)
         defaults = []
@@ -39,6 +38,7 @@ def getspec(f):
         args = spec.args[1:]  # remove reference to self
         return inspect.ArgSpec(
             args, spec.varargs, spec.keywords, spec.defaults)
+    # TODO handle partials
     raise ValueError(
         "getspec doesn't know how to get function spec from type {}".format(
             type(f)))

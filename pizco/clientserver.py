@@ -264,6 +264,9 @@ class Server(Agent):
                 callable(attr) or
                 (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit')) )
 
+    def is_signal(self, attr):
+        return (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit'))
+
     def force_as_object(self, attr):
         """Return True if the object must be returned as object even if it meets the conditions of a RemoteAttribute.
 
@@ -284,7 +287,25 @@ class Server(Agent):
                        if not name.startswith('_') and self.return_as_remote(value)])
         objects = set([name for name, value in inspect.getmembers(self.served_object)
                        if not name.startswith('_') and self.force_as_object(value)])
-        return remotes, objects
+        signals = set([name for name, value in inspect.getmembers(self.served_object)
+                       if not name.startswith('_') and self.is_signal(value)])
+        return remotes, objects, signals
+
+
+class SignalDict(defaultdict):
+    def __init__(self, request, *args, **kwargs):
+        defaultdict.__init__(self, Signal, *args, **kwargs)
+        self._request = request
+
+    def __missing__(self, key):
+        # TODO ZMQError cannot be completed in current state
+        args = []
+        for k in ['_nargs', '_kwargs', '_varargs', '_varkwargs']:
+            v = self._request('exec', {
+                'name': key[1], 'method': '__getattribute__', 'args': (k, )})
+            args.append(v)
+        LOGGER.debug("Creating signal for {} with args {}".format(key, args))
+        return Signal(*args)
 
 
 class ProxyAgent(Agent):
@@ -300,10 +321,11 @@ class ProxyAgent(Agent):
         ret = self.request(self.remote_rep_endpoint, 'info')
         self.remote_pub_endpoint = ret['pub_endpoint']
 
-        LOGGER.debug('Started Proxy pointing to REP: {} and PUB: {}'.format(self.remote_rep_endpoint, self.remote_pub_endpoint))
-        self._signals = defaultdict(Signal)
-        # TODO how to inspect remote signal to get spec
-
+        LOGGER.debug(
+            'Started Proxy pointing to REP: {} and PUB: {}'.format(
+                self.remote_rep_endpoint, self.remote_pub_endpoint))
+        #self._signals = defaultdict(Signal)
+        self._signals = SignalDict(self.request_server)
 
         #: Maps msgid to future object.
         self._futures = {}
@@ -321,7 +343,8 @@ class ProxyAgent(Agent):
         if force_as_object:
             options['force_as_object'] = True
 
-        content = self.request(self.remote_rep_endpoint, PSMessage(action, options))
+        content = self.request(
+            self.remote_rep_endpoint, PSMessage(action, options))
 
         try:
             ret_type, ret_action, ret_options = content
@@ -370,7 +393,7 @@ class ProxyAgent(Agent):
 
     def on_notification(self, sender, topic, content, msgid):
         try:
-            self._signals[(sender, topic)].emit(*content)
+            self._signals[(sender, topic)].emit(*content[0], **content[1])
         except KeyError:
             super(ProxyAgent, self).on_notification(
                 sender, topic, content, msgid)
@@ -400,8 +423,12 @@ class Proxy(object):
 
     def __init__(self, remote_endpoint):
         self._proxy_agent = ProxyAgent(remote_endpoint)
-        self._proxy_attr_as_remote, self._proxy_attr_as_object = self._proxy_agent.request_server('inspect', {})
-        
+        self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self._proxy_agent.request_server('inspect', {})
+        # TODO build signals here
+        for k in self._proxy_signals:
+            self._proxy_agent._signals[(remote_endpoint, k)] = \
+                self._proxy_agent._signals[(remote_endpoint, k)]
+
     def __getattr__(self, item):
         if item.startswith('_proxy_'):
             return super(Proxy, self).__getattr__(item)

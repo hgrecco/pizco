@@ -36,7 +36,7 @@ class Add1(Agent):
 class NoInspectServer(Server):
 
     def inspect(self):
-        return set(), set()
+        return set(), set(), set()
 
 
 class ReturnDictsServer(Server):
@@ -45,6 +45,9 @@ class ReturnDictsServer(Server):
         return isinstance(attr, dict)
 
     def return_as_remote(self, attr):
+        return False
+
+    def is_signal(self, attr):
         return False
 
 
@@ -450,7 +453,7 @@ class AgentTest(unittest.TestCase):
         proxy.rw_prop = 28
         time.sleep(SLEEP_SECS)
         self.assertEqual(proxy.rw_prop, 28)
-        self.assertEqual(fun1.called, 1)
+        self.assertEqual(fun1.called, 1)  # fail?
 
         fun2 = MemMethod()
         self.assertEqual(fun2.called, 0)
@@ -485,7 +488,6 @@ class AgentTest(unittest.TestCase):
         proxy._proxy_stop_me()
 
     def test_signal_two_proxies(self):
-        return
 
         address = 'tcp://127.0.0.1:6009'
 
@@ -499,7 +501,9 @@ class AgentTest(unittest.TestCase):
             def __init__(self_):
                 self_.called = 0
 
-            def __call__(self_, value, old_value, others):
+            #def __call__(self_, value, old_value, others):
+            #    self_.called += 1
+            def __call__(self_, value):
                 self_.called += 1
 
         fun = MemMethod()

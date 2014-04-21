@@ -368,6 +368,7 @@ class Agent(object):
         except:
             LOGGER.debug('Invalid message {}'.format(message))
         else:
+            # TODO why does this someties cause a KeyError
             callback = self.notifications_callbacks[(sender, topic)]
             if callback:
                 callback(sender, topic, content, msgid)

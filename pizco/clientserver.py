@@ -96,7 +96,13 @@ def PSMessage(action, options):
 
 
 def ServerLauncher(*args):
+    import time
     s = Server(*args)
+    #while s._running == False:
+    #    time.sleep(0.2)
+    #while s._running == False:
+    #    time.sleep(0.2)
+    time.sleep(5)
     s.serve_forever()
     
     
@@ -245,6 +251,8 @@ class Server(Agent):
         time.sleep(1)
         if rep_endpoint.find("*") != -1:
             pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
+        else:
+            pxy_endpoint = rep_endpoint
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy
@@ -262,7 +270,9 @@ class Server(Agent):
         import time
         time.sleep(1)
         if rep_endpoint.find("*") != -1:
-           pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
+            pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
+        else:
+            pxy_endpoint = rep_endpoint
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy

@@ -22,7 +22,6 @@ class Signal(object):
 
     def connect(self, slot):
         if slot not in self.slots:
-            spec = inspect.getargspec(slot)
             self.slots.append(slot)
 
     def disconnect(self, slot=None):
@@ -31,27 +30,30 @@ class Signal(object):
         else:
             self.slots.remove(slot)
 
+            
     def emit(self, *args):
-        for slot in self.slots:
-            #from functools import partial
-            spec = inspect.getargspec(slot)
-            #pcbk = partial(slot,*args)
-            #print spec
-            #print args
-            #print slot
-            #print type(slot)
-            #print len(args)
-            #print len(spec.args)
-            if spec.varargs is None:
-                if inspect.ismethod(slot):
-                    if len(args) >= len(spec.args):
-                        slot(*args[1:len(spec.args)])
+        try:
+            for slot in self.slots:
+                if inspect.isfunction(slot):
+                    spec = inspect.getargspec(slot)
+                    if spec.varargs is None:
+                        if inspect.ismethod(slot):
+                            if len(args) >= len(spec.args):
+                                slot(*args[1:len(spec.args)])
+                            else:
+                                slot(*args[:len(spec.args)])
+                        else:
+                            slot(*args[:len(spec.args)])
                     else:
-                        slot(*args[:len(spec.args)])
+                        slot(*args)
                 else:
-                    slot(*args[:len(spec.args)])
-            else:
-                slot(*args)
+                    if callable(slot):
+                        slot(*args)
+        except:
+            import traceback
+            traceback.print_exc()
+
+
 
 def bind(sock, endpoint='tcp://127.0.0.1:0'):
     """Bind socket to endpoint accepting a variety of endpoint formats.

@@ -54,13 +54,13 @@ class AgentManager(object):
     @classmethod
     def join(cls, agent):
         try:
-            #while cls.threads[agent.loop].isAlive():
-            LOGGER.debug("trying to join")
-            ret = cls.threads[agent.loop].join(5000)
-            if ret == None:
-                LOGGER.error("timeout")
-            else:
-                LOGGER.info("ended up with ret", ret)
+            while cls.threads[agent.loop].isAlive():
+                LOGGER.debug("trying to join")
+                ret = cls.threads[agent.loop].join(5000)
+                if ret == None:
+                    LOGGER.error("timeout")
+                else:
+                    LOGGER.info("ended up with ret", ret)
             LOGGER.debug("stopping thread {}".format(ret))
         except (KeyboardInterrupt, SystemExit):
             return
@@ -86,7 +86,8 @@ class Agent(object):
 
     def __init__(self, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
                  ctx=None, loop=None, protocol=None):
-
+        
+        self._running = False
         self.ctx = ctx or zmq.Context.instance()
         self.loop = loop or ioloop.IOLoop.instance()
         self.protocol = protocol or Protocol(os.environ.get('PZC_KEY', ''),
@@ -442,7 +443,8 @@ class Agent(object):
         except:
             LOGGER.debug('Invalid message {}'.format(message))
         else:
-            callback = self.notifications_callbacks[(sender, topic)]
+            #callback = self.notifications_callbacks[(sender, topic)]
+            callback = self.notifications_callbacks.get((sender, topic), None)
             if callback:
                 callback(sender, topic, content, msgid)
             else:

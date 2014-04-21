@@ -12,6 +12,36 @@ import inspect
 import traceback
 from zmq import ZMQError
 
+def specable(f):
+    try:
+        inspect.getargspec(f)
+        return True
+    except:
+        return False
+
+
+def getspec(f):
+    if specable(f):
+        spec = inspect.getargspec(f)
+        defaults = []
+        if spec.defaults is not None:
+            defaults = spec.defaults
+        if inspect.ismethod(f) and spec.args[0]=="self":
+            args = spec.args[1:]  # remove reference to self
+        return inspect.ArgSpec(
+            spec.args, spec.varargs is not None,
+            spec.keywords is not None, defaults)
+    if hasattr(f, '__call__') and specable(f.__call__):
+        spec = getspec(f.__call__)
+        args = spec.args[1:]  # remove reference to self
+        return inspect.ArgSpec(
+            args, spec.varargs, spec.keywords, spec.defaults)
+    # TODO handle partials
+    raise ValueError(
+        "getspec doesn't know how to get function spec from type {}".format(
+            type(f)))
+
+
 class Signal(object):
     """PyQt like signal object
     """
@@ -34,24 +64,22 @@ class Signal(object):
     def emit(self, *args):
         try:
             for slot in self.slots:
-                if inspect.isfunction(slot):
-                    spec = inspect.getargspec(slot)
-                    if spec.varargs is None:
-                        if inspect.ismethod(slot):
-                            if len(args) >= len(spec.args):
-                                slot(*args[1:len(spec.args)])
-                            else:
-                                slot(*args[:len(spec.args)])
+                spec = getspec(slot)
+                if not spec.varargs:
+                    if inspect.ismethod(slot):
+                        if len(args) >= len(spec.args):
+                            slot(*args[1:len(spec.args)])
                         else:
                             slot(*args[:len(spec.args)])
                     else:
-                        slot(*args)
+                        slot(*args[:len(spec.args)])
                 else:
-                    if callable(slot):
-                        slot(*args)
+                    slot(*args)
         except:
+            
             import traceback
             traceback.print_exc()
+            print spec
 
 
 

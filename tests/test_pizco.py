@@ -425,67 +425,63 @@ class AgentTest(unittest.TestCase):
         agent.stop()
 
     def test_signal(self):
-        try:
-            address = 'tcp://127.0.0.1:6008'
+        address = 'tcp://127.0.0.1:6008'
 
-            s = Server(Example(), rep_endpoint=address)
+        s = Server(Example(), rep_endpoint=address)
 
-            proxy = Proxy(address)
+        proxy = Proxy(address)
 
-            class MemMethod(object):
+        class MemMethod(object):
 
-                def __init__(self_):
-                    self_.called = 0
+            def __init__(self_):
+                self_.called = 0
 
-                def __call__(self_, value, old_value, others):
-                    self_.called += 1
+            def __call__(self_, value, old_value, others):
+                self_.called += 1
 
 
-            fun1 = MemMethod()
-            self.assertEqual(fun1.called, 0)
-            self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
-            proxy.rw_prop_changed.connect(fun1)
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
-            proxy.rw_prop = 28
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(proxy.rw_prop, 28)
-            self.assertEqual(fun1.called, 1)
+        fun1 = MemMethod()
+        self.assertEqual(fun1.called, 0)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
+        proxy.rw_prop_changed.connect(fun1)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop = 28
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(proxy.rw_prop, 28)
+        self.assertEqual(fun1.called, 1)
 
-            fun2 = MemMethod()
-            self.assertEqual(fun2.called, 0)
-            proxy.rw_prop_changed.connect(fun2)
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
-            proxy.rw_prop = 29
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(proxy.rw_prop, 29)
-            self.assertEqual(fun1.called, 2)
-            self.assertEqual(fun2.called, 1)
+        fun2 = MemMethod()
+        self.assertEqual(fun2.called, 0)
+        proxy.rw_prop_changed.connect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop = 29
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(proxy.rw_prop, 29)
+        self.assertEqual(fun1.called, 2)
+        self.assertEqual(fun2.called, 1)
 
-            proxy.rw_prop_changed.disconnect(fun1)
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
-            proxy.rw_prop = 30
-            self.assertEqual(fun1.called, 2)
+        proxy.rw_prop_changed.disconnect(fun1)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop = 30
+        self.assertEqual(fun1.called, 2)
 
-            proxy.rw_prop_changed.disconnect(fun2)
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
+        proxy.rw_prop_changed.disconnect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
 
-            proxy.rw_prop_changed.connect(fun1)
-            proxy.rw_prop_changed.connect(fun2)
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
-            proxy.rw_prop_changed.disconnect(None)
-            time.sleep(SLEEP_SECS)
-            self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
+        proxy.rw_prop_changed.connect(fun1)
+        proxy.rw_prop_changed.connect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop_changed.disconnect(None)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
 
-            proxy._proxy_stop_server()
-            proxy._proxy_stop_me()
-        except:
-            import traceback
-            traceback.print_exc()
+        proxy._proxy_stop_server()
+        proxy._proxy_stop_me()
 
     def test_signal_two_proxies(self):
 

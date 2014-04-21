@@ -444,7 +444,7 @@ class Agent(object):
             LOGGER.debug('Invalid message {}'.format(message))
         else:
             #callback = self.notifications_callbacks[(sender, topic)]
-            callback = self.notifications_callbacks.get((sender, topic), None)
+            callback = self.notifications_callbacks.get((sender, topic), None) #brett modification
             if callback:
                 callback(sender, topic, content, msgid)
             else:

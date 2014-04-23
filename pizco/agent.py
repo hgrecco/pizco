@@ -56,9 +56,10 @@ class AgentManager(object):
         try:
             while cls.threads[agent.loop].isAlive():
                 LOGGER.debug("trying to join")
-                ret = cls.threads[agent.loop].join(5000)
+                ret = cls.threads[agent.loop].join(1)
                 if ret == None:
-                    LOGGER.error("timeout")
+					pass
+                    #LOGGER.error("timeout")
                 else:
                     LOGGER.info("ended up with ret", ret)
             LOGGER.debug("stopping thread {}".format(ret))
@@ -222,7 +223,6 @@ class Agent(object):
         except KeyError:
             req = self.ctx.socket(zmq.REQ)
             req.connect(recipient)
-
             self.connections[recipient] = req
 
         msgid = req.send_multipart(self.protocol.format(self.rep_endpoint, '', content, None))
@@ -278,14 +278,15 @@ class Agent(object):
 
         """
         #TODO check issues in loop after restarting not connected
-        #print topic
-        #print content
-        #print self.rep_endpoint
-        #print dir(self.pub)
-        #print type(self)
-        #if self.pub.closed():
-        #    print "closed socket send"
-        self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
+        if not self.pub.closed(): #TODO : would try except be quicker
+            self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
+        else:
+            if self._running == True:
+                LOGGER.error("trying to publish on a closed pub socket {}".format(self.rep_endpoint))
+            else:
+                LOGGER.warning("trying to publish on a not running server {}".format(self.rep_endpoint))
+
+
 
     def publish(self, topic, content):
         """Thread safe publish of a message to the PUB socket.
@@ -298,6 +299,7 @@ class Agent(object):
         :param topic: topic of the message.
         :param content: content of the message.
         """
+        #TODO : check for closed here or there?
         self.loop.add_callback(lambda: self._publish(topic, content))
 
     def _on_incoming_xpub(self, stream, message):
@@ -414,7 +416,7 @@ class Agent(object):
         :param pub_endpoint: endpoint of an agent PUB socket, if not given it will be queried.
         """
         #fixing binding to all addresses with wildcards
-        if self.remote_pub_endpoint.find("*") != -1:
+        if self.remote_pub_endpoint.startswith("tcp://*"):
             defined_endpoint = self.remote_rep_endpoint.replace("/","").split(":")
             defined_endpoint[1] = "//*"
             rep_endpoint = ":".join(defined_endpoint)

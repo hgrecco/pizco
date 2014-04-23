@@ -36,7 +36,7 @@ class Add1(Agent):
 class NoInspectServer(Server):
 
     def inspect(self):
-        return set(), set()
+        return set(), set(), set()
 
 
 class ReturnDictsServer(Server):
@@ -47,10 +47,14 @@ class ReturnDictsServer(Server):
     def return_as_remote(self, attr):
         return False
 
+    def is_signal(self, attr):
+        return False
 
-class Example(object):
+class ExampleAuto(object):
 
     def __init__(self):
+        from pizco import Signal
+        Signal = Signal.Auto
         self.simple_attribute = 12
         self._private_value = 42
         self.dict_attribute = {1: 2}
@@ -107,9 +111,78 @@ class Example(object):
         def fun():
             time.sleep(1)
             raise ValueError
+        return executor.submit(fun)        
+
+class Example(object):
+
+    def __init__(self):
+        self.simple_attribute = 12
+        self._private_value = 42
+        self.dict_attribute = {1: 2}
+
+        self._rw_prop = 42
+        self._ro_prop = 42
+        self._wo_prop = 42
+        self.rw_prop_changed = Signal(nargs=1)
+        self.wo_prop_changed = Signal(nargs=1)
+
+
+    @property
+    def rw_prop(self):
+        return self._rw_prop
+
+    @rw_prop.setter
+    def rw_prop(self, value):
+        if self._rw_prop == value:
+            return
+        self.rw_prop_changed.emit(value)
+        self._rw_prop = value
+
+    @property
+    def ro_prop(self):
+        return self._ro_prop
+
+    def wo_prop(self, value):
+        if self._wo_prop == value:
+            return
+        self.wo_prop_changed.emit(value)
+        self._wo_prop = value
+
+    wo_prop = property(None, wo_prop)
+
+    def fun_simple(self):
+        return 46
+
+    def fun_arg1(self, x):
+        return x + 2
+
+    def fun_arg2(self, x=2, y=3):
+        return x ** y
+
+    def fun_raise(self):
+        raise ValueError('Bla')
+
+    def fut(self):
+        def fun():
+            time.sleep(1)
+            return 10
+        return executor.submit(fun)
+
+    def fut_raise(self):
+        def fun():
+            time.sleep(1)
+            raise ValueError
         return executor.submit(fun)
 
 
+        
+import random
+class RandomTestData(object):
+    def __init__(self,size=1024):
+        random.seed()
+        self.rand = random.sample(xrange(10000000), size)
+    def __repr__(self):
+        return str(self.rand[0:5])[:-1]+'...'+str(self.rand[-5:])[1:]
 
 
 lock = threading.RLock()
@@ -271,7 +344,6 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(s.served_object.dict_attribute[1], 2)
         self.assertEqual(proxy.dict_attribute[1], 2)
         self.assertRaises(KeyError, operator.getitem, proxy.dict_attribute, 2)
-        print(proxy.dict_attribute)
         proxy.dict_attribute[2] = 4
         self.assertEqual(s.served_object.dict_attribute[2], 4)
         self.assertEqual(proxy.dict_attribute[2], 4)
@@ -423,8 +495,70 @@ class AgentTest(unittest.TestCase):
 
         pub.close()
         agent.stop()
+        
+    def test_signal_auto(self):
 
+        address = 'tcp://127.0.0.1:6008'
+
+        s = Server(ExampleAuto(), rep_endpoint=address)
+
+        proxy = Proxy(address)
+
+        class MemMethod(object):
+
+            def __init__(self_):
+                self_.called = 0
+
+            #def __call__(self_, value, old_value, others):
+            #    self_.called += 1
+            def __call__(self_, value):
+                self_.called += 1
+
+        fun1 = MemMethod()
+        self.assertEqual(fun1.called, 0)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
+        proxy.rw_prop_changed.connect(fun1)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop = 28
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(proxy.rw_prop, 28)
+        self.assertEqual(fun1.called, 1)  # fail?
+
+        fun2 = MemMethod()
+        self.assertEqual(fun2.called, 0)
+        proxy.rw_prop_changed.connect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop = 29
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(proxy.rw_prop, 29)
+        self.assertEqual(fun1.called, 2)
+        self.assertEqual(fun2.called, 1)
+
+        proxy.rw_prop_changed.disconnect(fun1)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop = 30
+        self.assertEqual(fun1.called, 2)
+
+        proxy.rw_prop_changed.disconnect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
+
+        proxy.rw_prop_changed.connect(fun1)
+        proxy.rw_prop_changed.connect(fun2)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 1)
+        proxy.rw_prop_changed.disconnect(None)
+        time.sleep(SLEEP_SECS)
+        self.assertEqual(len(s.served_object.rw_prop_changed.slots), 0)
+
+        proxy._proxy_stop_server()
+        proxy._proxy_stop_me()
+        
     def test_signal(self):
+
         address = 'tcp://127.0.0.1:6008'
 
         s = Server(Example(), rep_endpoint=address)
@@ -436,9 +570,10 @@ class AgentTest(unittest.TestCase):
             def __init__(self_):
                 self_.called = 0
 
-            def __call__(self_, value, old_value, others):
+            #def __call__(self_, value, old_value, others):
+            #    self_.called += 1
+            def __call__(self_, value):
                 self_.called += 1
-
 
         fun1 = MemMethod()
         self.assertEqual(fun1.called, 0)
@@ -449,7 +584,7 @@ class AgentTest(unittest.TestCase):
         proxy.rw_prop = 28
         time.sleep(SLEEP_SECS)
         self.assertEqual(proxy.rw_prop, 28)
-        self.assertEqual(fun1.called, 1)
+        self.assertEqual(fun1.called, 1)  # fail?
 
         fun2 = MemMethod()
         self.assertEqual(fun2.called, 0)
@@ -497,7 +632,9 @@ class AgentTest(unittest.TestCase):
             def __init__(self_):
                 self_.called = 0
 
-            def __call__(self_, value, old_value, others):
+            #def __call__(self_, value, old_value, others):
+            #    self_.called += 1
+            def __call__(self_, value):
                 self_.called += 1
 
         fun = MemMethod()
@@ -529,6 +666,126 @@ class AgentTest(unittest.TestCase):
 
         proxy._proxy_stop_me()
         s.stop()
+        
+    def test_wildcards(self):
+        from threading import Thread,Event
+        from Queue import Queue
+        from functools import partial
+        class AggressiveServerObject(Thread):
+            sig_aggressive = Signal(2)
+            signal_size = 1024
+            signal_number = 100
+            def __init__(self):
+                super(AggressiveServerObject,self).__init__(name="PeerWatcher")
+                self._exit_e = Event()
+                self._job_e = Event()
+                self._job_e.set()
+                self._events = Queue()
+                self._periodicity = 0.01
+                self.heartbeat = 0
+                self._signal_sent = 0
+                self.add_events()
+
+            def add_events(self):
+                for i in range(0,self.signal_number):
+                    self.generate_random()
+            def run(self):
+                while not self._exit_e.isSet():
+                    if self._job_e.isSet():
+                        start_time = time.time()
+                        self.heartbeat += 1
+                        self.process_queue()
+                        exec_time = time.time()-start_time
+                    if self._exit_e.wait(self._periodicity-exec_time):
+                        break
+            def process_queue(self):
+                if self.is_alive():
+                    try:
+                        event = self._events.get(timeout=1)
+                    except Empty:
+                        pass
+                    else:
+                        event()
+            def generate_random(self):
+                evtcbk = partial(self.delayed_random,signal=RandomTestData(),num=self._signal_sent)
+                self._events.put(evtcbk)
+            def delayed_random(self,signal,num):
+                self.sig_aggressive.emit(signal,num)
+                self._signal_sent += 1
+            def pause(self):
+                self._job_e.clear()
+            def unpause(self):
+                self._job_e.set()
+            def stop(self):
+                self._job_e.clear()
+                self._exit_e.set()
+                self.join()#self._periodicity*3
+
+        class AggressiveClientObject(object):
+            def __init__(self):
+                super(AggressiveClientObject,self).__init__()
+                self.received = 0
+            def slot_aggressive(self, randstuff, sigcount):
+                self.received += 1
+                sigcount = sigcount
+                randstuff = randstuff
+        
+        def get_local_ip():
+            import socket
+            addrList = socket.getaddrinfo(socket.gethostname(), None)
+            ipList=[]
+            for item in addrList:
+                if item[0] == 2:
+                    ipList.append(item[4][0])
+            return ipList
+            
+        endpoint = "tcp://*:8200"
+        endpoint1 = "tcp://127.0.0.1:8200"
+        endpoint2 = "tcp://"+get_local_ip()[0]+":8200"
+        serverto = AggressiveServerObject()
+        server = Server(serverto, rep_endpoint=endpoint)
+        serverto.add_events()
+        to = AggressiveClientObject()
+        i = Proxy(endpoint1)
+        i.sig_aggressive.connect(to.slot_aggressive)
+        serverto.start()
+        serverto.add_events()
+        time.sleep(1.5)
+        self.assertNotEqual(to.received,0)
+        i.pause()
+        beat_before = i.heartbeat
+        time.sleep(0.5)
+        beat_after_pause = i.heartbeat
+        i.unpause()
+        time.sleep(0.5)
+        beat_after_unpause = i.heartbeat
+        self.assertGreater(beat_before,0)
+        self.assertEqual(beat_before,beat_after_pause,1)
+        self.assertGreater(beat_after_unpause,beat_after_pause)
+        i._proxy_stop_me()
+        del i # necessary to perform post stop callbacks
+
+        to2 = AggressiveClientObject()
+        i2 = Proxy(endpoint2)
+        i2._proxy_ping()
+        i2.sig_aggressive.connect(to2.slot_aggressive)
+        serverto.add_events()
+        time.sleep(0.5)
+        i2.pause()
+        beat_before = i2.heartbeat
+        time.sleep(0.5)
+        beat_after_pause = i2.heartbeat
+        i2.unpause()
+        time.sleep(0.5)
+        beat_after_unpause = i2.heartbeat
+        self.assertGreater(beat_before,0)
+        self.assertEqual(beat_before,beat_after_pause,1)
+        self.assertGreater(beat_after_unpause,beat_after_pause)
+        i2._proxy_stop_me()
+        del i2 # necessary to avoid post stop callbacks
+        serverto.stop()
+        server.stop()
+        time.sleep(5)
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(AgentTest)

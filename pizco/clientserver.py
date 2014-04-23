@@ -22,9 +22,10 @@ from .util import Signal
 from .agent import Agent
 
 from multiprocessing import Process
-import multiprocessing, logging
-logger = multiprocessing.log_to_stderr()
-logger.setLevel(multiprocessing.SUBDEBUG)
+import multiprocessing as mp
+import logging
+logger = mp.log_to_stderr()
+logger.setLevel(mp.SUBDEBUG)
 
 if sys.version_info < (3, 2):
     import futures
@@ -85,8 +86,11 @@ class RemoteAttribute(object):
     def disconnect(self, fun):
         self.signal_manager('disconnect', self.name, fun)
 
-    def emit(self, value, old_value, other):
-        self.signal_manager('emit', self.name, (value, old_value, other))
+    #def emit(self, value, old_value, other):
+    #    self.signal_manager('emit', self.name, (value, old_value, other))
+
+    def emit(self, *args, **kwargs):
+        self.signal_manager('emit', self.name, (args, kwargs))
 
 
 def PSMessage(action, options):
@@ -100,7 +104,7 @@ def ServerLauncher(*args):
     s = Server(*args)
     #while s._running == False:
     #    time.sleep(0.2)
-    #while s._running == False:
+    #while s._running == True:
     #    time.sleep(0.2)
     time.sleep(5)
     s.serve_forever()
@@ -214,9 +218,13 @@ class Server(Agent):
             tb = traceback.format_exception(exc_type, exc_value, exc_tb)[1:]
             return PSMessage('raise', (ex, tb))
 
-    def emit(self, topic, value, old_value, other):
-        LOGGER.debug('Emitting {}, {}, {}, {}'.format(topic, value, old_value, other))
-        self.publish(topic, (value, old_value, other))
+    #def emit(self, topic, value, old_value, other):
+    #    LOGGER.debug('Emitting {}, {}, {}, {}'.format(topic, value, old_value, other))
+    #    self.publish(topic, (value, old_value, other))
+
+    def emit(self, topic, *args, **kwargs):
+        LOGGER.debug('Emitting {}, {}, {}'.format(topic, args, kwargs))
+        self.publish(topic, (args, kwargs))
 
     def on_subscribe(self, topic, count):
         try:
@@ -226,9 +234,13 @@ class Server(Agent):
 
         if count == 1:
             LOGGER.debug('Connecting {} signal on server'.format(topic))
-            def fun(value, old_value=None, other=None):
-                LOGGER.debug('ready to emit')
-                self.emit(topic, value, old_value, other)
+            #def fun(value, old_value=None, other=None):
+            #    LOGGER.debug('ready to emit')
+            #    self.emit(topic, value, old_value, other)
+
+            def fun(*args, **kwargs):
+                #LOGGER.debug('ready to emit')
+                self.emit(topic, *args, **kwargs)
             self.signal_calls[topic] = fun
             signal.connect(self.signal_calls[topic])
 
@@ -263,10 +275,10 @@ class Server(Agent):
                          verbose=False, gui=False):
         #cwd = os.path.dirname(inspect.getfile(served_cls))
         #launch(cwd, rep_endpoint, pub_endpoint, verbose, gui)
+        #mp.set_start_method("forkserver")
         p = Process(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint))
-        p.daemon = True
+        p.daemon=True
         p.start()
-       
         import time
         time.sleep(1)
         if rep_endpoint.find("*") != -1:
@@ -293,6 +305,9 @@ class Server(Agent):
                 callable(attr) or
                 (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit')) )
 
+    def is_signal(self, attr):
+        return (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit') and hasattr(attr,'_nargs'))
+
     def force_as_object(self, attr):
         """Return True if the object must be returned as object even if it meets the conditions of a RemoteAttribute.
 
@@ -313,7 +328,25 @@ class Server(Agent):
                        if not name.startswith('_') and self.return_as_remote(value)])
         objects = set([name for name, value in inspect.getmembers(self.served_object)
                        if not name.startswith('_') and self.force_as_object(value)])
-        return remotes, objects
+        signals = set([name for name, value in inspect.getmembers(self.served_object)
+                       if not name.startswith('_') and self.is_signal(value)])
+        return remotes, objects, signals
+
+
+class SignalDict(defaultdict):
+    def __init__(self, request, *args, **kwargs):
+        defaultdict.__init__(self, Signal, *args, **kwargs)
+        self._request = request
+
+    def __missing__(self, key):
+        # TODO ZMQError cannot be completed in current state
+        args = []
+        for k in ['_nargs', '_kwargs', '_varargs', '_varkwargs']:
+            v = self._request('exec', {
+                'name': key[1], 'method': '__getattribute__', 'args': (k, )})
+            args.append(v)
+        LOGGER.debug("Creating signal for {} with args {}".format(key, args))
+        return Signal(*args)
 
 
 class ProxyAgent(Agent):
@@ -334,8 +367,11 @@ class ProxyAgent(Agent):
         ret = self.request(self.remote_rep_endpoint, 'info')
         self.remote_pub_endpoint = ret['pub_endpoint']
 
-        LOGGER.debug('Started Proxy pointing to REP: {} and PUB: {}'.format(self.remote_rep_endpoint, self.remote_pub_endpoint))
-        self._signals = defaultdict(Signal)
+        LOGGER.debug(
+            'Started Proxy pointing to REP: {} and PUB: {}'.format(
+                self.remote_rep_endpoint, self.remote_pub_endpoint))
+        #self._signals = defaultdict(Signal)
+        self._signals = SignalDict(self.request_server)
 
         #: Maps msgid to future object.
         self._futures = {}
@@ -418,7 +454,14 @@ class ProxyAgent(Agent):
 
     def on_notification(self, sender, topic, content, msgid):
         try:
-            self._signals[(sender, topic)].emit(*content)
+
+
+            if (sender,topic) in self._signals:
+                self._signals[(sender, topic)].emit(*content[0], **content[1])
+                #self._signals[(sender, topic)].emit(*content)
+            else:
+                LOGGER.warning("not supposed to happen")
+                raise KeyError
         except KeyError:
             super(ProxyAgent, self).on_notification(
                 sender, topic, content, msgid)
@@ -445,11 +488,18 @@ class Proxy(object):
 
     :param remote_endpoint: endpoint of the server.
     """
+    def __init__(self, remote_endpoint,creation_timeout=0):
+        self._proxy_agent = ProxyAgent(remote_endpoint,creation_timeout)
+        self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self._proxy_agent.request_server('inspect', {})
+        # TODO build signals here
+        for k in self._proxy_signals:
+            if self._proxy_agent.remote_pub_endpoint.find("*") != -1:
+                signal_endpoint = "tcp://*:"+remote_endpoint.split(":")[-1]
+            else:
+                signal_endpoint = remote_endpoint
+            self._proxy_agent._signals[(signal_endpoint, k)] = \
+                self._proxy_agent._signals[(signal_endpoint, k)]
 
-    def __init__(self, remote_endpoint, creation_timeout=0):
-        self._proxy_agent = ProxyAgent(remote_endpoint, creation_timeout=creation_timeout)
-        self._proxy_attr_as_remote, self._proxy_attr_as_object = self._proxy_agent.request_server('inspect', {})
-        
     def __getattr__(self, item):
         if item.startswith('_proxy_'):
             return super(Proxy,self).__getattr__(item)

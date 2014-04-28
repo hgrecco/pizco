@@ -1,13 +1,33 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-from distutils.core import setup
+try:
+    import sys
+    reload(sys).setdefaultencoding("UTF-8")
+except:
+    pass
 
-with open('README') as file:
-    long_description = file.read()
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
+
+import codecs
+
+
+def read(filename):
+    return codecs.open(filename, encoding='utf-8').read()
+
+
+long_description = '\n\n'.join([read('README'),
+                                read('AUTHORS'),
+                                read('CHANGES')])
+
+__doc__ = long_description
 
 setup(
     name='Pizco',
-    version='0.1',
+    version='0.2.dev0',
     description='Python remote objects with ZMQ',
     long_description=long_description,
     author='Hernan E. Grecco',

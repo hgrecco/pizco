@@ -132,9 +132,6 @@ class Protocol(object):
             else:
                 raise ValueError('Unknown serializer {}'.format(serializer))
         except Exception as ex:
-            print topic
-            print sender
-            print content
             raise ValueError('Could not serialize content with {}'.format(ex))
 
         if just_header:

@@ -17,20 +17,16 @@ import threading
 import traceback
 from collections import defaultdict
 
-from . import LOGGER, launch
-from .util import Signal
-from .agent import Agent
-
 from multiprocessing import Process
 import multiprocessing as mp
-import logging
+
+from . import LOGGER
+from .util import Signal
+from .agent import Agent
+from .compat import futures
+
 logger = mp.log_to_stderr()
 logger.setLevel(mp.SUBDEBUG)
-
-if sys.version_info < (3, 2):
-    import futures
-else:
-    from concurrent import futures
 
 
 HIDE_TRACEBACK = os.environ.get('PZC_HIDE_TRACEBACK', True)

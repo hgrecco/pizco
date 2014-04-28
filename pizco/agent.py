@@ -54,11 +54,12 @@ class AgentManager(object):
     @classmethod
     def join(cls, agent):
         try:
+            ret = None
             while cls.threads[agent.loop].isAlive():
                 LOGGER.debug("trying to join")
                 ret = cls.threads[agent.loop].join(1)
                 if ret == None:
-					pass
+                    pass
                     #LOGGER.error("timeout")
                 else:
                     LOGGER.info("ended up with ret", ret)

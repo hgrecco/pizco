@@ -1,0 +1,6 @@
+exclude *.pyc *~ .DS_Store
+
+include README
+include LICENSE
+
+recursive-include pizco *

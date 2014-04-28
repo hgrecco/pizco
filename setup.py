@@ -25,6 +25,12 @@ long_description = '\n\n'.join([read('README'),
 
 __doc__ = long_description
 
+
+requirements = []
+if sys.version_info < (3, 2):
+    requirements.append('futures')
+
+
 setup(
     name='Pizco',
     version='0.2.dev0',
@@ -35,6 +41,7 @@ setup(
     url='https://github.com/hgrecco/pizco',
     packages=['pizco'],
     test_suite='pizco.testsuite.testsuite',
+    install_requires=requirements,
     package_data={},
     extras_require = {
         'pyzmq':  ['pyzmq'],

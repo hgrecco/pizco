@@ -2,6 +2,7 @@
 
 from __future__ import division, unicode_literals, print_function, absolute_import
 
+import os
 import unittest
 
 def testsuite():
@@ -19,7 +20,7 @@ def main():
 
 
 def run():
-    """Run all tests i
+    """Run all tests
     """
     test_runner = unittest.TextTestRunner()
     test_runner.run(testsuite())

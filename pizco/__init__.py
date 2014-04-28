@@ -15,6 +15,8 @@ import logging
 import subprocess
 import warnings
 
+from .compat import NullHandler
+
 import zmq
 
 if (zmq.zmq_version_info()[0] < 3):
@@ -23,7 +25,7 @@ if (zmq.zmq_version_info()[0] < 3):
             zmq.zmq_version()))
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.addHandler(logging.NullHandler())
+LOGGER.addHandler(NullHandler())
 
 def main(args=None):
     import argparse

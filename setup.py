@@ -14,6 +14,7 @@ setup(
     author_email='hernan.grecco@gmail.com',
     url='https://github.com/hgrecco/pizco',
     packages=['pizco'],
+    test_suite='pizco.testsuite.testsuite',
     package_data={},
     extras_require = {
         'pyzmq':  ['pyzmq'],

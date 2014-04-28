@@ -275,7 +275,7 @@ class ServicesWatcher(Thread):
                 retcode = v._proxy_ping(3000)
                 LOGGER.debug(("ping duration ", time.time() - start_time))
                 LOGGER.debug(("pinging server ",k,retcode))
-                if retcode == 'ping:
+                if retcode == 'ping':
                     pass
                 else:
                     death_list.append(k)

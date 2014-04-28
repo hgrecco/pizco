@@ -18,15 +18,17 @@ from collections import defaultdict
 import zmq
 from zmq.eventloop import zmqstream, ioloop
 
+from . import compat
 from . import LOGGER
 from .protocol import Protocol
 from .util import bind
+
 
 class AgentManager(object):
 
     agents = weakref.WeakKeyDictionary()
     threads = weakref.WeakKeyDictionary()
-    in_use = weakref.WeakSet()
+    in_use = compat.WeakSet()
 
     @classmethod
     def add(cls, agent):

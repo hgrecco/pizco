@@ -29,7 +29,8 @@ __doc__ = long_description
 requirements = []
 if sys.version_info < (3, 2):
     requirements.append('futures')
-
+if sys.version_info < (2, 7):
+    requirements.append('weakrefset')
 
 setup(
     name='Pizco',

@@ -40,3 +40,9 @@ try:
 except ImportError:
     from queue import Queue, Empty
 
+try:
+    # location in Python 2.7 and 3.1
+    from weakref import WeakSet
+except ImportError:
+    # separately installed
+    from weakrefset import WeakSet

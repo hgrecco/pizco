@@ -277,8 +277,8 @@ class Agent(object):
         This methods must be executed in IOLoop thread.
 
         """
-        #TODO check issues in loop after restarting not connected
-        if not self.pub.closed(): #TODO : would try except be quicker
+        #TODO check issues in loop after restarting not connected
+        if not self.pub.closed(): #TODO : would try except be quicker
             self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
         else:
             if self._running == True:
@@ -299,7 +299,7 @@ class Agent(object):
         :param topic: topic of the message.
         :param content: content of the message.
         """
-        #TODO : check for closed here or there?
+        #TODO : check for closed here or there?
         self.loop.add_callback(lambda: self._publish(topic, content))
 
     def _on_incoming_xpub(self, stream, message):
@@ -441,7 +441,7 @@ class Agent(object):
         """
         try:
             sender, topic, content, msgid = self.protocol.parse(message)
-            LOGGER.debug(("RECEIVE notification : ",sender,topic))
+            LOGGER.debug(("RECEIVE notification : ",sender,topic))
         except:
             LOGGER.debug('Invalid message {}'.format(message))
         else:

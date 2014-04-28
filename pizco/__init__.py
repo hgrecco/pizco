@@ -25,6 +25,7 @@ if (zmq.zmq_version_info()[0] < 3):
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.NullHandler())
 
+
 def main(args=None):
     import argparse
     parser = argparse.ArgumentParser('Starts an server')

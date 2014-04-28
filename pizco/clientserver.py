@@ -422,7 +422,7 @@ class ProxyAgent(Agent):
     def signal_manager(self, action, signal_name, fun):
 
         #the remote rep endpoint is ignored in the server sending with it is not possible on multiple threads
-        #TODOÂ : check if its compliant to multiple object
+        #TODO : check if its compliant to multiple object
         #fixing connection with wildcard adresses
         if self.remote_pub_endpoint.find("*") != -1:
             defined_endpoint = self.remote_rep_endpoint.replace("/","").split(":")

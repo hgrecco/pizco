@@ -1,7 +1,7 @@
-
-import unittest
+# -*- coding: utf-8 -*-
 
 from pizco.util import bind, Signal, SignalError
+from pizco.compat import unittest
 
 
 class MockSocket(object):

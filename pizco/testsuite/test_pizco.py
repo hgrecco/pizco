@@ -2,7 +2,6 @@
 
 import time
 import operator
-import unittest
 import threading
 
 from threading import Thread
@@ -19,6 +18,8 @@ def set_zmq_context_to_none():
 
 from pizco import Proxy, Server, Agent, Signal
 from pizco.protocol import Protocol
+from pizco.compat import unittest
+
 
 PROTOCOL_HEADER = Protocol.HEADER
 

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import random
-import unittest
 import logging
 from multiprocessing import freeze_support
 from functools import partial
@@ -10,7 +9,7 @@ from threading import Thread, Event
 
 from pizco import Signal, LOGGER, Proxy, Server
 from pizco.naming import configure_test, PeerWatcher, ServicesWatcher, Naming
-from pizco.compat import Queue, Empty, PYTHON3, u
+from pizco.compat import Queue, Empty, PYTHON3, u, unittest
 
 configure_test(logging.INFO,False)
 

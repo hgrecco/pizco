@@ -1,6 +1,6 @@
+# -*- coding: utf-8 -*-
 
-import unittest
-
+from pizco.compat import unittest
 from pizco.protocol import Protocol
 
 class TestProtocol(unittest.TestCase):

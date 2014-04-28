@@ -20,6 +20,11 @@ if sys.version_info < (3, 2):
 else:
     from concurrent import futures
 
+if sys.version_info < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
+
 if PYTHON3:
     def u(x):
         return x

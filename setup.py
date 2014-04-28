@@ -31,6 +31,7 @@ if sys.version_info < (3, 2):
     requirements.append('futures')
 if sys.version_info < (2, 7):
     requirements.append('weakrefset')
+    requirements.append('unittest2')
 
 setup(
     name='Pizco',

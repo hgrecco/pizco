@@ -3,7 +3,8 @@
 from __future__ import division, unicode_literals, print_function, absolute_import
 
 import os
-import unittest
+
+from pizco.compat import unittest
 
 def testsuite():
     """A testsuite that has all the pint tests.

@@ -263,7 +263,7 @@ class ServicesWatcher(Thread):
         self._events.put(evtcbck)
         
     def delayed_register_local_proxy(self, servicename,endpoint):
-        LOGGER.debug("registering local proxy %s", servicename,endpoint)
+        LOGGER.debug("registering local proxy %s %s", servicename, endpoint)
         endpoint = endpoint.replace("*", "127.0.0.1")
         with self._sl_lock:
             if servicename not in self._local_proxies:
@@ -281,8 +281,8 @@ class ServicesWatcher(Thread):
             for k,v in self._local_proxies.items():
                 start_time = time.time()
                 retcode = v._proxy_ping(3000)
-                LOGGER.debug(("ping duration ", time.time() - start_time))
-                LOGGER.debug(("pinging server ",k,retcode))
+                LOGGER.debug("ping duration: %s", time.time() - start_time)
+                LOGGER.debug("pinging server %s -> %s", k, retcode)
                 if retcode == 'ping':
                     pass
                 else:
@@ -408,10 +408,10 @@ class Naming(Thread):
                 pxy = Server.serve_in_thread(Naming, args=(local_only,),
                                              kwargs={}, rep_endpoint="tcp://"+address+":"+str(Naming.NAMING_SERVICE_PORT))
             pxy.start()                
-            pxy.register_local_service("pizconaming","tcp://"+address+":"+str(Naming.NAMING_SERVICE_PORT))
+            pxy.register_local_service("pizconaming", "tcp://"+address+":"+str(Naming.NAMING_SERVICE_PORT))
         else:
             try:
-                pxy = Proxy("tcp://127.0.0.1:"+str(Naming.NAMING_SERVICE_PORT),3000)
+                pxy = Proxy("tcp://127.0.0.1:" + str(Naming.NAMING_SERVICE_PORT), 3000)
                 try:
                     pxy.get_services()
                 except:
@@ -453,9 +453,10 @@ class Naming(Thread):
             LOGGER.debug(addrinfo)
             LOGGER.debug(self.get_local_ip())
             try:
-                rn_service = Proxy("tcp://{0}:{1}".format(addrinfo,self.NAMING_SERVICE_PORT),creation_timeout=2000)
+                rn_service = Proxy("tcp://{0}:{1}".format(addrinfo, self.NAMING_SERVICE_PORT),
+                                   creation_timeout=2000)
             except:
-                LOGGER.error(("no naming service present at ",addrinfo, self.NAMING_SERVICE_PORT))
+                LOGGER.error("no naming service present at %s:%s", addrinfo, self.NAMING_SERVICE_PORT)
             else:
                 self.peer_proxies[addrinfo] = rn_service
                 custom_slot = self._make_remote_services_slot(addrinfo)
@@ -472,7 +473,7 @@ class Naming(Thread):
         with self._serviceslock:
             if type == "birth":
                 for name,port in rservices.iteritems():
-                    self.remote_services[name]=  "tcp://{0}:{1}".format(addrinfo,port.split(":")[-1])
+                    self.remote_services[name] = "tcp://{0}:{1}".format(addrinfo, port.split(":")[-1])
             elif type == "death":
                 for name,port in rservices.iteritems():
                     if name in self.remote_services:
@@ -499,22 +500,22 @@ class Naming(Thread):
     def get_exportable_services(self):
         return self.exportable_local_services
 
-    def register_local_service(self,service_name,endpoint):
+    def register_local_service(self, service_name,endpoint):
         with self._serviceslock:
             try:
-                LOGGER.info("registering endpoint %s",endpoint)
+                LOGGER.info("registering endpoint %s", endpoint)
                 #ok only if the service is the local service not the proxy
                 if endpoint.startswith("tcp://*"):
                     endpoint = endpoint.replace("*","127.0.0.1")
                     self.local_services[service_name] = endpoint
                     if service_name != "pizconaming":
                         self.exportable_local_services[service_name] = endpoint
-                        self.sig_exportable_services.emit("birth",self.exportable_local_services.copy())
+                        self.sig_exportable_services.emit("birth", self.exportable_local_services.copy())
                 elif not endpoint.startswith("tcp://127.0.0.1"):
                     #remote only managed service
                     self.exportable_local_services[service_name] = endpoint
                     if service_name != "pizconaming":
-                        self.sig_exportable_services.emit("birth",self.exportable_local_services.copy())
+                        self.sig_exportable_services.emit("birth", self.exportable_local_services.copy())
                 else:
                     self.local_services[service_name] = endpoint
                 if service_name != "pizconaming":

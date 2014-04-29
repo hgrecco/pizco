@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import time
 import random
 import logging
 from multiprocessing import freeze_support
@@ -34,7 +35,7 @@ class NamingTestObject(object):
     sig_register_local_service = Signal(2)
     sig_unregister_local_service = Signal(1)
     def on_service_death(self,service):
-        LOGGER.info(service + "is dead")
+        LOGGER.info(service + " is dead")
         self.service = service
 
 
@@ -186,9 +187,11 @@ class TestNamingService(unittest.TestCase):
         to = TestObject()
         s = Server(to,rep_endpoint="tcp://*:500")
         time.sleep(1)
-        ns.register_local_service("myremote","tcp://*:500")
+        ns.register_local_service("myremote", "tcp://*:500")
         ns.test_peer_death()
-        self.assertEqual(ns.get_services(), {'myremote': 'tcp://127.0.0.1:500', 'pizconaming': 'tcp://127.0.0.1:5777'})
+        self.assertEqual(ns.get_services(),
+                         {'myremote': 'tcp://127.0.0.1:500',
+                          'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+0.5)*PeerWatcher.PEER_LIFES_AT_START)
         ns.test_peer_death_end()
         LOGGER.info("simulation of server object crash")
@@ -214,7 +217,9 @@ class TestNamingService(unittest.TestCase):
         self.assertEqual(addproxy.times(50),50)
         time.sleep(1)
         LOGGER.info(ns.get_services())
-        self.assertEqual(ns.get_services(), {'myremote': 'tcp://127.0.0.1:500', 'pizconaming': 'tcp://127.0.0.1:5777'})
+        self.assertEqual(ns.get_services(),
+                         {'myremote': 'tcp://127.0.0.1:500',
+                          'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(1)
         addproxy._proxy_stop_server()
         del addproxy
@@ -232,7 +237,7 @@ class TestNamingService(unittest.TestCase):
         serverto = AggressiveTestServerObject()
         s = Server(serverto,rep_endpoint=endpoint)
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
-        ns.register_local_service("aggressive",endpoint)
+        ns.register_local_service("aggressive", endpoint)
         time.sleep(2)
         to = AggressiveTestClientObject()
         time.sleep(1)
@@ -255,11 +260,11 @@ class TestNamingService(unittest.TestCase):
         i.unpause()
         time.sleep(2)
         beat_after_unpause = i.heartbeat
-        LOGGER.info(["heartbeat = ",i.heartbeat])
-        self.assertGreater(beat_before,0)
-        self.assertEqual(beat_before,beat_after_pause,1)
-        self.assertGreater(beat_after_unpause,beat_after_pause)
-        self.assertNotEqual(to.received,0)
+        LOGGER.info('heartbeat = %s', i.heartbeat)
+        self.assertGreater(beat_before, 0)
+        self.assertEqual(beat_before, beat_after_pause, 1)
+        self.assertGreater(beat_after_unpause, beat_after_pause)
+        self.assertNotEqual(to.received, 0)
         print("done ar with ns")
         i.sig_aggressive.disconnect(to.slot_aggressive)
         ns.unregister_local_service("aggressive")
@@ -272,12 +277,13 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_me()
         del ns
         time.sleep(2)
+
     def testARemoteCaseMulti(self):
         #endpoint = "ipc://robbie-the-robot" not supported in windows
         LOGGER.setLevel(test_log_level)
         endpoint = "tcp://*:8100"
         endpoint1 = "tcp://127.0.0.1:8100"
-        endpoint2 = "tcp://" + Naming.get_local_ip()[0]+":8100"
+        endpoint2 = "tcp://" + Naming.get_local_ip()[0] + ":8100"
         serverto = AggressiveTestServerObject()
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         server = Server(serverto, rep_endpoint=endpoint)
@@ -295,7 +301,7 @@ class TestNamingService(unittest.TestCase):
         LOGGER.debug('X frame received %s', to.received)
         self.assertNotEqual(to.received,0)
         i.pause()
-        LOGGER.info('heartbeat = %s',i.heartbeat)
+        LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_before = i.heartbeat
         time.sleep(0.5)
         LOGGER.info('heartbeat = %s', i.heartbeat)
@@ -304,9 +310,9 @@ class TestNamingService(unittest.TestCase):
         time.sleep(0.5)
         beat_after_unpause = i.heartbeat
         LOGGER.info('heartbeat = %s', i.heartbeat)
-        self.assertGreater(beat_before,0)
-        self.assertEqual(beat_before,beat_after_pause,1)
-        self.assertGreater(beat_after_unpause,beat_after_pause)
+        self.assertGreater(beat_before, 0)
+        self.assertEqual(beat_before, beat_after_pause, 1)
+        self.assertGreater(beat_after_unpause, beat_after_pause)
         i._proxy_stop_me()
         del i # necessary to perform post stop callbacks
 

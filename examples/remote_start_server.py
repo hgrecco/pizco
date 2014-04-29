@@ -29,7 +29,7 @@ proxy.door_open = False
 
 for step in range(3, 0, -1):
     time.sleep(1)
-    print('Stopping in {}'.format(step))
+    print('Stopping in {0}'.format(step))
 
 proxy._proxy_stop_server()
 

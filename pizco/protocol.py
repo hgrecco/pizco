@@ -74,7 +74,7 @@ class Protocol(object):
             signed, signature = message[:4], message[4]
         except:
             raise ValueError('The message has the wrong number of parts. '
-                             'Expected 5, received: {}'.format(len(message)))
+                             'Expected 5, received: {0}'.format(len(message)))
 
         if key and not compare_digest(self._signature(key, signed), signature):
             raise ValueError('The signature does not match.')
@@ -88,14 +88,14 @@ class Protocol(object):
             raise ValueError('Could not decode or split message parts from UTF-8 bytes.')
 
         if header != self.HEADER:
-            raise ValueError('Wrong header. In server: {}, received: {}'.format(self.HEADER, header))
+            raise ValueError('Wrong header. In server: {0}, received: {1}'.format(self.HEADER, header))
 
         if check_sender and check_sender != sender and sender.find("tcp://*") == -1:
             #todo verify port also
-            raise ValueError('Wrong Sender Sender. Sent: {}, received: {}'.format(check_sender, sender))
+            raise ValueError('Wrong Sender Sender. Sent: {0}, received: {1}'.format(check_sender, sender))
 
         if check_msgid and check_msgid != msgid:
-            raise ValueError('Wrong Message ID. Sent: {}, received: {}'.format(check_msgid, msgid))
+            raise ValueError('Wrong Message ID. Sent: {0}, received: {1}'.format(check_msgid, msgid))
 
         try:
             if serializer.startswith('pickle'):
@@ -103,9 +103,9 @@ class Protocol(object):
             elif serializer == 'json':
                 content = json.loads(content)
             else:
-                raise ValueError('Invalid serializer: {}'.format(serializer))
+                raise ValueError('Invalid serializer: {0}'.format(serializer))
         except Exception as ex:
-            raise ValueError('Could not deserialize content: {}'.format(ex))
+            raise ValueError('Could not deserialize content: {0}'.format(ex))
 
         return sender, topic, content, msgid
 
@@ -130,9 +130,9 @@ class Protocol(object):
             elif serializer == 'json':
                 content = json.dumps(content).encode('utf-8')
             else:
-                raise ValueError('Unknown serializer {}'.format(serializer))
+                raise ValueError('Unknown serializer {0}'.format(serializer))
         except Exception as ex:
-            raise ValueError('Could not serialize content with {}'.format(ex))
+            raise ValueError('Could not serialize content with {0}'.format(ex))
 
         if just_header:
             return (self.HEADER + '+' + sender + '+' + topic).encode('utf-8')

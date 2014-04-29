@@ -45,7 +45,7 @@ def getspec(f):
             args, spec.varargs, spec.keywords, spec.defaults)
     # TODO handle partials
     raise ValueError(
-        "getspec doesn't know how to get function spec from type {}".format(
+        "getspec doesn't know how to get function spec from type {0}".format(
             type(f)))
 
 
@@ -81,31 +81,31 @@ class Signal(object):
         if not spec.varargs:  # function expects args
             if self._varargs:
                 raise SignalError(
-                    "Slot {} does not accept varargs".format(slot))
+                    "Slot {0} does not accept varargs".format(slot))
             else:  # check nargs
                 if self._nargs == -1:
                     self._auto_match(len(spec.args))
                 maxargs = len(spec.args)
                 if maxargs < self._nargs:
                     raise SignalError(
-                        "Slot {} does not accept enough args {} {}".format(
+                        "Slot {0} does not accept enough args {1} {2}".format(
                             slot, maxargs, spec))
                 minargs = maxargs - len(spec.defaults)
                 if minargs > self._nargs:
                     raise SignalError(
-                        "Slot {} expects too many args {} {}".format(
+                        "Slot {0} expects too many args {1} {2}".format(
                             slot, minargs, spec))
 
         if not spec.keywords:  # function only accepts specific kwargs
             if self._varkwargs:
                 raise SignalError(
-                    "Slot {} does not accept varkwargs".format(slot))
+                    "Slot {0} does not accept varkwargs".format(slot))
             else:  # signal only passes specific kwargs
                 kwargs = spec.args[::-1][:len(spec.defaults)]
                 for kw in self._kwargs:
                     if kw not in kwargs:
                         raise SignalError(
-                            "Slot {} does not accept keyword {}".format(
+                            "Slot {0} does not accept keyword {1}".format(
                                 slot, kw))
 
     def connect(self, slot):
@@ -129,14 +129,14 @@ class Signal(object):
                 
             if len(args) != self._nargs:
                 raise SignalError(
-                    "emit called with invalid number of args {}".format(
+                    "emit called with invalid number of args {0}".format(
                         len(args)))
                      
         if not self._varkwargs:  # check kwargs
             for k in kwargs:
                 if k not in self._kwargs:
                     raise SignalError(
-                        "emit called with invalid kwarg {}".format(
+                        "emit called with invalid kwarg {0}".format(
                             k))
 
     def emit(self, *args, **kwargs):
@@ -164,7 +164,7 @@ def bind(sock, endpoint='tcp://127.0.0.1:0'):
     if not endpoint:
         endpoint = 'tcp://127.0.0.1:0'
     elif isinstance(endpoint, (tuple, list)):
-        endpoint = 'tcp://{}:{}'.format(*endpoint)
+        endpoint = 'tcp://{0}:{1}'.format(*endpoint)
 
     if endpoint.startswith('tcp://') and endpoint.endswith(':0'):
         endpoint = endpoint[:-2]

@@ -421,7 +421,7 @@ class AgentTest(unittest.TestCase):
 
         pub = self.create_socket(zmq.PUB)
         port = pub.bind_to_random_port('tcp://127.0.0.1')
-        endpoint = 'tcp://127.0.0.1:{}'.format(port)
+        endpoint = 'tcp://127.0.0.1:{0}'.format(port)
 
         agent = Agent()
 
@@ -459,7 +459,7 @@ class AgentTest(unittest.TestCase):
 
         pub = self.create_socket(zmq.PUB)
         port = pub.bind_to_random_port('tcp://127.0.0.1')
-        endpoint = 'tcp://127.0.0.1:{}'.format(port)
+        endpoint = 'tcp://127.0.0.1:{0}'.format(port)
 
         class DefNot(Agent):
 

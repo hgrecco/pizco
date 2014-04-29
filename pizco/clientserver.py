@@ -394,7 +394,7 @@ class ProxyAgent(Agent):
             if ret_type != 'PSMessage':
                 raise ValueError
         except:
-            raise ValueError('Invalid response from Server {}'.format(content))
+            raise ValueError('Invalid response from Server {0}'.format(content))
 
         if ret_action == 'raise':
             exc, traceback_text = ret_options
@@ -410,7 +410,7 @@ class ProxyAgent(Agent):
             self._futures[ret_options] = fut
             return fut
         else:
-            raise ValueError('Unknown {}'.format(ret_action))
+            raise ValueError('Unknown {0}'.format(ret_action))
 
     def signal_manager(self, action, signal_name, fun):
 

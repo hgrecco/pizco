@@ -36,7 +36,7 @@ class AgentManager(object):
         try:
             cls.agents[loop].append(agent)
         except KeyError:
-            t = threading.Thread(target=loop.start, name='ioloop-{}'.format(id(loop)))
+            t = threading.Thread(target=loop.start, name='ioloop-{0}'.format(id(loop)))
             cls.agents[loop] = [agent, ]
             cls.threads[loop] = t
             cls.in_use.add(loop)

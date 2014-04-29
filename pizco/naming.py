@@ -453,7 +453,7 @@ class Naming(Thread):
             LOGGER.debug(addrinfo)
             LOGGER.debug(self.get_local_ip())
             try:
-                rn_service = Proxy("tcp://{}:{}".format(addrinfo,self.NAMING_SERVICE_PORT),creation_timeout=2000)
+                rn_service = Proxy("tcp://{0}:{1}".format(addrinfo,self.NAMING_SERVICE_PORT),creation_timeout=2000)
             except:
                 LOGGER.error(("no naming service present at ",addrinfo, self.NAMING_SERVICE_PORT))
             else:
@@ -472,7 +472,7 @@ class Naming(Thread):
         with self._serviceslock:
             if type == "birth":
                 for name,port in rservices.iteritems():
-                    self.remote_services[name]=  "tcp://{}:{}".format(addrinfo,port.split(":")[-1])
+                    self.remote_services[name]=  "tcp://{0}:{1}".format(addrinfo,port.split(":")[-1])
             elif type == "death":
                 for name,port in rservices.iteritems():
                     if name in self.remote_services:

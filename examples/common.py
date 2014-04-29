@@ -38,8 +38,8 @@ class House(object):
     @door_open.setter
     def door_open(self, value):
         if value not in (True, False):
-            raise ValueError("'{}' is not a valid value for door_open".format(value))
-        logger.info('Setting door_open to {}'.format(value))
+            raise ValueError("'{0}' is not a valid value for door_open".format(value))
+        logger.info('Setting door_open to {0}'.format(value))
         if self._door_open == value:
             logger.info('No need to change door_open')
             return
@@ -54,8 +54,8 @@ class House(object):
     @lights_on.setter
     def lights_on(self, value):
         if value not in (True, False):
-            raise ValueError("'{}' is not a valid value for lights_on".format(value))
-        logger.info('Setting lights_on to {}'.format(value))
+            raise ValueError("'{0}' is not a valid value for lights_on".format(value))
+        logger.info('Setting lights_on to {0}'.format(value))
         if self._lights_on == value:
             logger.info('No need to change lights_on')
             return
@@ -64,11 +64,11 @@ class House(object):
 
     def paint(self, color):
         if color not in COLORS:
-            raise ValueError("'{}' is not a valid color ({})".format(color, COLORS))
-        logger.info('Painting: {}'.format(color))
+            raise ValueError("'{0}' is not a valid color ({1})".format(color, COLORS))
+        logger.info('Painting: {0}'.format(color))
         time.sleep(.5)
         self.color_changed.emit(color)
-        logger.info('Painted: {}'.format(color))
+        logger.info('Painted: {0}'.format(color))
 
     def _changing_roof(self):
         time.sleep(1)

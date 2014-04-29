@@ -50,7 +50,7 @@ def main(args=None):
 
     from pizco import Server
     s = Server(None, args.rep_endpoint, args.pub_endpoint)
-    print('Server started at {}'.format(s.rep_endpoint))
+    print('Server started at {0}'.format(s.rep_endpoint))
     if args.gui:
         if sys.version_info < (3, 0):
             from Tkinter import Tk, Label
@@ -65,10 +65,10 @@ def main(args=None):
         name = s.served_object.__class__.__name__
 
         root = Tk()
-        root.title('Pizco Server: {}'.format(name))
-        Label(root, text='{}'.format(name)).pack(padx=5)
-        Label(root, text='REP: {}'.format(s.rep_endpoint)).pack(padx=5)
-        Label(root, text='PUB: {}'.format(s.pub_endpoint)).pack(padx=5)
+        root.title('Pizco Server: {0}'.format(name))
+        Label(root, text='{0}'.format(name)).pack(padx=5)
+        Label(root, text='REP: {0}'.format(s.rep_endpoint)).pack(padx=5)
+        Label(root, text='PUB: {0}'.format(s.pub_endpoint)).pack(padx=5)
         root.resizable(width=False, height=False)
         root.mainloop()
     else:
@@ -97,7 +97,7 @@ def launch(cwd, rep_endpoint, pub_endpoint, verbose=True, gui=False):
                        r"""-p \"{0[cwd]}\" {0[verbose]} {0[gui]}"' """ \
                        r""" -e 'end tell' """
         else:
-            raise RuntimeError('Platform not support: {}'.format(sys.platform))
+            raise RuntimeError('Platform not support: {0}'.format(sys.platform))
 
     o = dict(python=sys.executable, pizco=__file__,
              rep_endpoint=rep_endpoint, pub_endpoint=pub_endpoint,

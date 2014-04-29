@@ -8,9 +8,10 @@
     :copyright: 2013 by Hernan E. Grecco, see AUTHORS for more details.
     :license: BSD, see LICENSE for more details.
 """
+
 import inspect
 import traceback
-from zmq import ZMQError
+
 
 class SignalError(Exception):
     pass
@@ -51,6 +52,7 @@ def getspec(f):
 class Signal(object):
     """PyQt like signal object
     """
+
     def __init__(self, nargs=0, kwargs=None, varargs=False, varkwargs=False):
         # add dummy types for signals or hide a pyqtSignal behind to resync
         # with qt main loop
@@ -62,10 +64,12 @@ class Signal(object):
             self._kwargs = kwargs
         self._varargs = varargs
         self._varkwargs = varkwargs
+
     @staticmethod
     def Auto():
         return Signal(nargs=-1)
-    def _auto_match(self,nargs):
+
+    def _auto_match(self, nargs):
         #autoconnect on first connection
         self._nargs = nargs
         
@@ -112,7 +116,6 @@ class Signal(object):
             self._verify_slot(slot)
             self.slots.append(slot)
 
-
     def disconnect(self, slot=None):
         if slot is None:
             self.slots = []
@@ -143,7 +146,6 @@ class Signal(object):
         self._verify_emit(args, kwargs)
         for slot in self.slots:
             slot(*args, **kwargs)
-
 
 
 def bind(sock, endpoint='tcp://127.0.0.1:0'):

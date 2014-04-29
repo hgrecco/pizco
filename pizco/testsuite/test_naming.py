@@ -117,7 +117,7 @@ class RandomTestData(object):
 class TestNamingService(unittest.TestCase):
     def testPeerWatcher(self):
         LOGGER.setLevel(test_log_level)
-        while PeerWatcher.check_beacon_port() == True:
+        while PeerWatcher.check_beacon_port():
             LOGGER.info("trying to stop naming service")
             ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()
@@ -135,7 +135,7 @@ class TestNamingService(unittest.TestCase):
 
     def testServiceWatcher(self):
         LOGGER.setLevel(test_log_level)
-        while PeerWatcher.check_beacon_port() == True:
+        while PeerWatcher.check_beacon_port():
             print(LOGGER.info("trying to stop naming service"))
             ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()

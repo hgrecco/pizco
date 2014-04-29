@@ -286,7 +286,7 @@ class Agent(object):
         if not self.pub.closed(): #TODO : would try except be quicker
             self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
         else:
-            if self._running == True:
+            if self._running:
                 LOGGER.error('trying to publish on a closed pub socket %s', self.rep_endpoint)
             else:
                 LOGGER.warning('trying to publish on a not running server %s', self.rep_endpoint)

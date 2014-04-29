@@ -98,9 +98,9 @@ def PSMessage(action, options):
 def ServerLauncher(*args):
     import time
     s = Server(*args)
-    #while s._running == False:
+    #while not s._running:
     #    time.sleep(0.2)
-    #while s._running == True:
+    #while s._running:
     #    time.sleep(0.2)
     time.sleep(5)
     s.serve_forever()
@@ -120,7 +120,7 @@ class Server(Agent):
         try:
             LOGGER.debug("test server")
             if rep_endpoint.find("*") != -1:
-                pub_endpoint = pub_endpoint.replace("127.0.0.1","*")
+                pub_endpoint = pub_endpoint.replace("127.0.0.1", "*")
             self.served_object = served_object
             self.signal_calls = {}
             super(Server, self).__init__(rep_endpoint, pub_endpoint, ctx, loop)
@@ -153,7 +153,7 @@ class Server(Agent):
         try:
             content_type, action, options = content
             if content_type != 'PSMessage':
-                raise ValueError()
+                raise ValueError('Invalid content type %s' % content_type)
         except:
             return super(Server, self).on_request(
                 sender, topic, content, msgid)
@@ -278,13 +278,12 @@ class Server(Agent):
         import time
         time.sleep(1)
         if rep_endpoint.find("*") != -1:
-            pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
+            pxy_endpoint = rep_endpoint.replace("*", "127.0.0.1")
         else:
             pxy_endpoint = rep_endpoint
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         return proxy
-
 
     def serve_forever(self):
         self.join()
@@ -299,10 +298,11 @@ class Server(Agent):
                 hasattr(attr, '__getitem__') or
                 hasattr(attr, '__setitem__') or
                 callable(attr) or
-                (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit')) )
+                hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit'))
 
     def is_signal(self, attr):
-        return (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and hasattr(attr, 'emit') and hasattr(attr,'_nargs'))
+        return (hasattr(attr, 'connect') and hasattr(attr, 'disconnect') and
+                hasattr(attr, 'emit') and hasattr(attr, '_nargs'))
 
     def force_as_object(self, attr):
         """Return True if the object must be returned as object even if it meets the conditions of a RemoteAttribute.
@@ -375,9 +375,7 @@ class ProxyAgent(Agent):
                        self.on_future_completed, self.remote_pub_endpoint)
 
     def ping_server(self,timeout=5000):
-        return self.request_polled(self.remote_rep_endpoint,"ping",timeout)
-
-
+        return self.request_polled(self.remote_rep_endpoint, "ping", timeout)
 
     def request_server(self, action, options, force_as_object=False):
         """Sends a request to the associated server using PSMessage
@@ -420,7 +418,7 @@ class ProxyAgent(Agent):
         #TODO : check if its compliant to multiple object
         #fixing connection with wildcard adresses
         if self.remote_pub_endpoint.find("*") != -1:
-            defined_endpoint = self.remote_rep_endpoint.replace("/","").split(":")
+            defined_endpoint = self.remote_rep_endpoint.replace("/", "").split(":")
             defined_endpoint[1] = "//*"
             signal_endpoint = ":".join(defined_endpoint)
         else:
@@ -449,8 +447,6 @@ class ProxyAgent(Agent):
 
     def on_notification(self, sender, topic, content, msgid):
         try:
-
-
             if (sender,topic) in self._signals:
                 self._signals[(sender, topic)].emit(*content[0], **content[1])
                 #self._signals[(sender, topic)].emit(*content)
@@ -484,7 +480,7 @@ class Proxy(object):
     :param remote_endpoint: endpoint of the server.
     """
     def __init__(self, remote_endpoint,creation_timeout=0):
-        self._proxy_agent = ProxyAgent(remote_endpoint,creation_timeout)
+        self._proxy_agent = ProxyAgent(remote_endpoint, creation_timeout)
         self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self._proxy_agent.request_server('inspect', {})
         # TODO build signals here
         for k in self._proxy_signals:
@@ -508,8 +504,10 @@ class Proxy(object):
             return
 
         return self._proxy_agent.request_server('setattr', {'name': item, 'value': value})
+
     def _proxy_ping(self,ping_timeout=3000):
         return self._proxy_agent.ping_server(ping_timeout)
+
     def _proxy_stop_server(self):
         self._proxy_agent.request(self._proxy_agent.remote_rep_endpoint, 'stop')
 
@@ -517,5 +515,5 @@ class Proxy(object):
         self._proxy_agent.stop()
 
     def __del__(self):
-        if hasattr(super(Proxy,self),"_proxy_agent"):
+        if hasattr(super(Proxy, self), "_proxy_agent"):
             self._proxy_agent.stop()

@@ -8,8 +8,16 @@ from functools import partial
 from threading import Thread, Event
 
 from pizco import Signal, LOGGER, Proxy, Server
-from pizco.naming import configure_test, PeerWatcher, ServicesWatcher, Naming
+from pizco.naming import PeerWatcher, ServicesWatcher, Naming
 from pizco.compat import Queue, Empty, PYTHON3, u, unittest
+
+
+def configure_test(level, process):
+    global perform_test_in_process
+    global test_log_level
+    test_log_level = level
+    perform_test_in_process = process
+
 
 configure_test(logging.INFO,False)
 
@@ -21,6 +29,7 @@ class TestObject(object):
         self._times *= multiply
         return self._times
 
+
 class NamingTestObject(object):
     sig_register_local_service = Signal(2)
     sig_unregister_local_service = Signal(1)
@@ -28,20 +37,16 @@ class NamingTestObject(object):
         LOGGER.info(service + "is dead")
         self.service = service
 
+
 perform_test_in_process = False
 test_log_level = logging.DEBUG
-
-def configure_test(level,process):
-    global perform_test_in_process
-    global test_log_level
-    test_log_level = level
-    perform_test_in_process = process
 
 
 class AggressiveTestServerObject(Thread):
     sig_aggressive = Signal(2)
     signal_size = 1024
     signal_number = 100
+
     def __init__(self):
         super(AggressiveTestServerObject,self).__init__(name="PeerWatcher")
         self._exit_e = Event()
@@ -56,6 +61,7 @@ class AggressiveTestServerObject(Thread):
     def add_events(self):
         for i in range(0,self.signal_number):
             self.generate_random()
+
     def run(self):
         while not self._exit_e.isSet():
             if self._job_e.isSet():
@@ -65,6 +71,7 @@ class AggressiveTestServerObject(Thread):
                 exec_time = time.time() - start_time
             if self._exit_e.wait(self._periodicity - exec_time):
                 break
+
     def process_queue(self):
         if self.is_alive():
             try:
@@ -73,26 +80,33 @@ class AggressiveTestServerObject(Thread):
                 pass
             else:
                 event()
+
     def generate_random(self):
         evtcbk = partial(self.delayed_random,signal=RandomTestData(),num=self._signal_sent)
         self._events.put(evtcbk)
+
     def delayed_random(self,signal,num):
         self.sig_aggressive.emit(signal,num)
         self._signal_sent += 1
+
     def pause(self):
         self._job_e.clear()
+
     def unpause(self):
         self._job_e.set()
+
     def stop(self):
         self._job_e.clear()
         self._exit_e.set()
-        self.join()#self._periodicity*3
+        self.join()  # self._periodicity*3
 
 
 class AggressiveTestClientObject(object):
+
     def __init__(self):
         super(AggressiveTestClientObject,self).__init__()
         self.received = 0
+
     def slot_aggressive(self, randstuff, sigcount):
         self.received += 1
         sigcount = sigcount
@@ -327,7 +341,6 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_me()
         del ns
         time.sleep(1)
-
 
 
 if __name__ == "__main__":

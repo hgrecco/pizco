@@ -13,19 +13,17 @@ import os
 import sys
 import logging
 import subprocess
-import warnings
 
 from .compat import NullHandler
 
 import zmq
 
-if (zmq.zmq_version_info()[0] < 3):
-    warnings.warn(
-        "ZMQ version {} < 3, notifications will not work".format(
-            zmq.zmq_version()))
-
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(NullHandler())
+
+if (zmq.zmq_version_info()[0] < 3):
+    LOGGER.warning('ZMQ version %s < 3, notifications will not work',
+                   zmq.zmq_version())
 
 def main(args=None):
     import argparse

@@ -174,8 +174,7 @@ def bind(sock, endpoint='tcp://127.0.0.1:0'):
         except Exception as e:
             from . import LOGGER
             import traceback
-            LOGGER.error("connecting endpoint {} : ".format(endpoint))
-            LOGGER.error(traceback.format_exc())
+            LOGGER.error('connecting endpoint %s:\n%s', endpoint, traceback.format_exc())
             raise e
 
     return endpoint

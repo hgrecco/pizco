@@ -64,8 +64,8 @@ class AgentManager(object):
                     pass
                     #LOGGER.error("timeout")
                 else:
-                    LOGGER.info("ended up with ret", ret)
-            LOGGER.debug("stopping thread {}".format(ret))
+                    LOGGER.info("ended up with ret=%s", ret)
+            LOGGER.debug("stopping thread %s", ret)
         except (KeyboardInterrupt, SystemExit):
             return
 
@@ -96,7 +96,8 @@ class Agent(object):
         self.loop = loop or ioloop.IOLoop.instance()
         self.protocol = protocol or Protocol(os.environ.get('PZC_KEY', ''),
                                              os.environ.get('PZC_SER', 'pickle'))
-        LOGGER.debug('New agent at {} with context {} and loop {}'.format(rep_endpoint, self.ctx, self.loop))
+        LOGGER.debug('New agent at %s with context %s and loop %s',
+                     rep_endpoint, self.ctx, self.loop)
 
         #: Connections to other agents (endpoint:REQ socket)
         self.connections = {}
@@ -105,7 +106,7 @@ class Agent(object):
         rep = self.ctx.socket(zmq.REP)
         self.rep_endpoint = bind(rep, rep_endpoint)
 
-        LOGGER.debug('Bound rep at {} REP.'.format(self.rep_endpoint, self.rep_endpoint))
+        LOGGER.debug('Bound rep at %s REP', self.rep_endpoint)
 
         #: Subscribers per topics (topic:count of subscribers)
         self.subscribers = defaultdict(int)
@@ -114,12 +115,12 @@ class Agent(object):
         pub = self.ctx.socket(zmq.XPUB)
         self.pub_endpoint = bind(pub, pub_endpoint)
 
-        LOGGER.debug('{} PUB: {}'.format(self.rep_endpoint, self.pub_endpoint))
+        LOGGER.debug('%s PUB: %s', self.rep_endpoint, self.pub_endpoint)
 
         #: Incoming notification socket
         sub = self.ctx.socket(zmq.SUB)
         self.sub_endpoint = bind(sub)
-        LOGGER.debug('{} SUB: {}'.format(self.rep_endpoint, self.sub_endpoint))
+        LOGGER.debug('%s SUB: %s', self.rep_endpoint, self.sub_endpoint)
 
         #: dict (sender, topic), callback(sender, topic, payload)
         self.notifications_callbacks = {}
@@ -145,7 +146,7 @@ class Agent(object):
 
             self._running = True
 
-            LOGGER.info('Started agent {}'.format(self.rep_endpoint))
+            LOGGER.info('Started agent %s', self.rep_endpoint)
 
     def stop(self):
         """Stop actor unsubscribing from all notification and closing the streams.
@@ -173,7 +174,7 @@ class Agent(object):
         self.connections = {}
         AgentManager.remove(self)
         self._running = False
-        LOGGER.info('Stopped agent {} in loop'.format(self.rep_endpoint))
+        LOGGER.info('Stopped agent %s in loop', self.rep_endpoint)
         
     def clean_instance(self):
         LOGGER.info('cleaning served object')
@@ -194,7 +195,7 @@ class Agent(object):
         :param content: content to be sent.
         :return: The response of recipient.
         """
-        LOGGER.debug('{} -> {}: {}'.format(self, recipient, content))
+        LOGGER.debug('%s -> %s: %s', self, recipient, content)
         try:
             req = self.connections[recipient]
         except KeyError:
@@ -206,7 +207,7 @@ class Agent(object):
         if req.poll(timeout):
             sender, topic, content, msgid = self.protocol.parse(req.recv_multipart(), recipient, msgid)
         else:
-            LOGGER.warning("timeout on {}-{}".format(self.rep_endpoint,content))
+            LOGGER.warning('timeout on %s-%s', self.rep_endpoint, content)
             content = None
         return content
 
@@ -220,7 +221,7 @@ class Agent(object):
         :param content: content to be sent.
         :return: The response of recipient.
         """
-        LOGGER.debug('{} -> {}: {}'.format(self, recipient, content))
+        LOGGER.debug('%s -> %s: %s', self, recipient, content)
         try:
             req = self.connections[recipient]
         except KeyError:
@@ -245,9 +246,10 @@ class Agent(object):
             topic = ret = msgid = ''
             LOGGER.debug(ex)
         else:
-            LOGGER.debug('{} <- {}: ({}) {}'.format(self.rep_endpoint, sender, msgid, content))
+            LOGGER.debug('%s <- %s: (%s) %s',
+                         self.rep_endpoint, sender, msgid, content)
             ret = self.on_request(sender, topic, content, msgid)
-            LOGGER.debug('Return value for {}: {}'.format(msgid, ret))
+            LOGGER.debug('Return value for %s: %s', msgid, ret)
 
         stream.send_multipart(self.protocol.format(self.rep_endpoint, topic, ret, msgid))
 
@@ -285,9 +287,9 @@ class Agent(object):
             self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
         else:
             if self._running == True:
-                LOGGER.error("trying to publish on a closed pub socket {}".format(self.rep_endpoint))
+                LOGGER.error('trying to publish on a closed pub socket %s', self.rep_endpoint)
             else:
-                LOGGER.warning("trying to publish on a not running server {}".format(self.rep_endpoint))
+                LOGGER.warning('trying to publish on a not running server %s', self.rep_endpoint)
 
 
 
@@ -317,10 +319,10 @@ class Agent(object):
             action, full_topic = message[0] == '\x01', message[1:]
             protocol, source, topic = full_topic.split('+')
         except Exception as ex:
-            LOGGER.debug('Invalid message from {}: {}\n{}'.format(stream, message, ex))
+            LOGGER.debug('Invalid message from %s: %s\n%s', stream, message, ex)
             return
 
-        LOGGER.debug('Incoming XPUB {} {}'.format(action, topic))
+        LOGGER.debug('Incoming XPUB %s %s', action, topic)
 
         if action:
             self.subscribers[topic] += 1
@@ -353,11 +355,11 @@ class Agent(object):
         This methods must be executed in IOLoop thread.
         """
         if endpoint not in self.sub_connections:
-            LOGGER.debug("subscribing to {}".format(endpoint))
+            LOGGER.debug('subscribing to %s', endpoint)
             self.sub.connect(endpoint)
             self.sub_connections.add(endpoint)
         self.sub.setsockopt(zmq.SUBSCRIBE, agentid_topic)
-        LOGGER.debug('Subscription sent to {}'.format(agentid_topic))
+        LOGGER.debug('Subscription sent to %s', agentid_topic)
 
     def _unsubscribe(self, endpoint, agentid_topic):
         """Unsubscribe to a topic at endpoint.
@@ -365,7 +367,7 @@ class Agent(object):
         This methods must be executed in IOLoop thread.
         """
         self.sub.setsockopt(zmq.UNSUBSCRIBE, agentid_topic)
-        LOGGER.debug('Unsubscription sent to {}'.format(agentid_topic))
+        LOGGER.debug('Unsubscription sent to %s', agentid_topic)
 
     def subscribe(self, rep_endpoint, topic, callback=None, pub_endpoint=None):
         """Thread safe subscribe to a topic at endpoint from another agent
@@ -402,7 +404,7 @@ class Agent(object):
 
 
         agentid_topic  = self.protocol.format(rep_endpoint, topic, just_header=True)
-        LOGGER.debug('Subscribing to {} with {}'.format(agentid_topic, callback))
+        LOGGER.debug('Subscribing to %s with %s', agentid_topic, callback)
         self.loop.add_callback(lambda: self._subscribe(pub_endpoint, agentid_topic))
         self.notifications_callbacks[(rep_endpoint, topic)] = callback
         
@@ -431,7 +433,7 @@ class Agent(object):
             self.rep_to_pub[rep_endpoint] = pub_endpoint
 
         agentid_topic  = self.protocol.format(rep_endpoint, topic, just_header=True)
-        LOGGER.debug('Unsubscribing to {}'.format(agentid_topic))
+        LOGGER.debug('Unsubscribing to %s', agentid_topic)
         self.loop.add_callback(lambda: self._unsubscribe(pub_endpoint, agentid_topic))
         del self.notifications_callbacks[(rep_endpoint, topic)]
        
@@ -444,9 +446,9 @@ class Agent(object):
         """
         try:
             sender, topic, content, msgid = self.protocol.parse(message)
-            LOGGER.debug(("RECEIVE notification : ",sender,topic))
+            LOGGER.debug("RECEIVE notification from % (topic: %s) ", sender,topic)
         except:
-            LOGGER.debug('Invalid message {}'.format(message))
+            LOGGER.debug('Invalid message %s', message)
         else:
             #callback = self.notifications_callbacks[(sender, topic)]
             callback = self.notifications_callbacks.get((sender, topic), None) #brett modification
@@ -466,7 +468,7 @@ class Agent(object):
         :param content: content of the notification.
         :param msgid: message id.
         """
-        LOGGER.debug('Received notification: {}, {}, {}, {}'.format(sender, topic, msgid, content))
+        LOGGER.debug('Received notification: %s, %s, %s, %s', sender, topic, msgid, content)
 
     def join(self):
         AgentManager.join(self)

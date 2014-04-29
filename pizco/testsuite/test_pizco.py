@@ -9,6 +9,7 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 import zmq
 
+from pizco.compat import Queue, Empty
 
 def set_zmq_context_to_none():
     if hasattr(zmq.Context, '_instance'):
@@ -670,7 +671,6 @@ class AgentTest(unittest.TestCase):
         
     def test_wildcards(self):
         from threading import Thread,Event
-        from Queue import Queue
         from functools import partial
         class AggressiveServerObject(Thread):
             sig_aggressive = Signal(2)

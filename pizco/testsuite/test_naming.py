@@ -233,10 +233,10 @@ class TestNamingService(unittest.TestCase):
         serverto.start()
         time.sleep(1)
         i.pause()
-        LOGGER.info(["heartbeat = ",i.heartbeat])
+        LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_before = i.heartbeat
         time.sleep(1)
-        LOGGER.info(["heartbeat = ",i.heartbeat])
+        LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_after_pause = i.heartbeat
         i.unpause()
         time.sleep(2)
@@ -278,18 +278,18 @@ class TestNamingService(unittest.TestCase):
         serverto.add_events()
 
         time.sleep(2)
-        LOGGER.debug("X frame received {}".format(to.received))
+        LOGGER.debug('X frame received %s', to.received)
         self.assertNotEqual(to.received,0)
         i.pause()
-        LOGGER.info(["heartbeat = ",i.heartbeat])
+        LOGGER.info('heartbeat = %s',i.heartbeat)
         beat_before = i.heartbeat
         time.sleep(0.5)
-        LOGGER.info(["heartbeat = ",i.heartbeat])
+        LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_after_pause = i.heartbeat
         i.unpause()
         time.sleep(0.5)
         beat_after_unpause = i.heartbeat
-        LOGGER.info(["heartbeat = ",i.heartbeat])
+        LOGGER.info('heartbeat = %s', i.heartbeat)
         self.assertGreater(beat_before,0)
         self.assertEqual(beat_before,beat_after_pause,1)
         self.assertGreater(beat_after_unpause,beat_after_pause)
@@ -304,15 +304,15 @@ class TestNamingService(unittest.TestCase):
         serverto.add_events()
         time.sleep(0.5)
         i2.pause()
-        LOGGER.info(["heartbeat = ",i2.heartbeat])
+        LOGGER.info('heartbeat = %s', i2.heartbeat)
         beat_before = i2.heartbeat
         time.sleep(0.5)
-        LOGGER.info(["heartbeat = ",i2.heartbeat])
+        LOGGER.info('heartbeat = %s', i2.heartbeat)
         beat_after_pause = i2.heartbeat
         i2.unpause()
         time.sleep(0.5)
         beat_after_unpause = i2.heartbeat
-        LOGGER.info(["heartbeat = ",i2.heartbeat])
+        LOGGER.info('heartbeat = %s', i2.heartbeat)
         self.assertGreater(beat_before,0)
         self.assertEqual(beat_before,beat_after_pause,1)
         self.assertGreater(beat_after_unpause,beat_after_pause)

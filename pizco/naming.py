@@ -144,10 +144,10 @@ class PeerWatcher(Thread):
             if v > 0:
                 self.peers_list[k] = v-1
                 if v >= self.PEER_LIFES_AT_START:
-                    LOGGER.debug("promoted {} score {}".format(k,v))
+                    LOGGER.debug('promoted %s score %s', k, v)
                     self.sig_peer_birth.emit(u(k))
             else:
-                LOGGER.debug("death of peer {}".format(k))
+                LOGGER.debug('death of peer %s', k)
                 death_list.append(k)
                 self.sig_peer_death.emit(u(k))
         for k in death_list:

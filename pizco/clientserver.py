@@ -76,7 +76,7 @@ class RemoteAttribute(object):
         return self.request('exec', payload)
 
     def connect(self, fun):
-        LOGGER.debug('Connecting {} to {}'.format(self.name, fun))
+        LOGGER.debug('Connecting %s to %s', self.name, fun)
         self.signal_manager('connect', self.name, fun)
 
     def disconnect(self, fun):
@@ -197,7 +197,7 @@ class Server(Agent):
                 self.served_object = klass(*options['args'], **options['kwargs'])
                 return PSMessage('return', None)
             else:
-                ret = Exception('invalid message action {}'.format(action))
+                ret = Exception('invalid message action %s', action)
                 return PSMessage('raise', (ret, ''))
 
             if isinstance(ret, futures.Future):
@@ -219,7 +219,7 @@ class Server(Agent):
     #    self.publish(topic, (value, old_value, other))
 
     def emit(self, topic, *args, **kwargs):
-        LOGGER.debug('Emitting {}, {}, {}'.format(topic, args, kwargs))
+        LOGGER.debug('Emitting %s, %s, %s', topic, args, kwargs)
         self.publish(topic, (args, kwargs))
 
     def on_subscribe(self, topic, count):
@@ -229,7 +229,7 @@ class Server(Agent):
             return
 
         if count == 1:
-            LOGGER.debug('Connecting {} signal on server'.format(topic))
+            LOGGER.debug('Connecting %s signal on server', topic)
             #def fun(value, old_value=None, other=None):
             #    LOGGER.debug('ready to emit')
             #    self.emit(topic, value, old_value, other)
@@ -246,7 +246,7 @@ class Server(Agent):
         except AttributeError:
             return
         if count == 0:
-            LOGGER.debug('Disconnecting {} signal on server'.format(topic))
+            LOGGER.debug('Disconnecting %s signal on server', topic)
             signal.disconnect(self.signal_calls[topic])
             del self.signal_calls[topic]
 
@@ -341,7 +341,7 @@ class SignalDict(defaultdict):
             v = self._request('exec', {
                 'name': key[1], 'method': '__getattribute__', 'args': (k, )})
             args.append(v)
-        LOGGER.debug("Creating signal for {} with args {}".format(key, args))
+        LOGGER.debug('Creating signal for %s with args %s', key, args)
         return Signal(*args)
 
 
@@ -363,9 +363,8 @@ class ProxyAgent(Agent):
         ret = self.request(self.remote_rep_endpoint, 'info')
         self.remote_pub_endpoint = ret['pub_endpoint']
 
-        LOGGER.debug(
-            'Started Proxy pointing to REP: {} and PUB: {}'.format(
-                self.remote_rep_endpoint, self.remote_pub_endpoint))
+        LOGGER.debug('Started Proxy pointing to REP: %s and PUB: %s',
+                     self.remote_rep_endpoint, self.remote_pub_endpoint)
         #self._signals = defaultdict(Signal)
         self._signals = SignalDict(self.request_server)
 

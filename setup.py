@@ -45,6 +45,7 @@ setup(
     test_suite='pizco.testsuite.testsuite',
     install_requires=requirements,
     package_data={},
+    include_package_data = True,
     extras_require = {
         'pyzmq':  ['pyzmq'],
         },

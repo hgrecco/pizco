@@ -186,9 +186,8 @@ class PeerWatcher(Thread):
                 return True
             else:
                 LOGGER.error("exception in socket verification")
-                sock = None
-                return False
-                raise e
+				#FIXME : perform more tests on linux
+                return True
         else:
             sock.close()
             sock = None

@@ -5,6 +5,8 @@
 
     Implements a Naming service
 
+	It sends broadcast on udp port 9999
+	
     :copyright: 2013 by Hernan E. Grecco, see AUTHORS for more details.
     :license: BSD, see LICENSE for more details.
 """
@@ -186,8 +188,9 @@ class PeerWatcher(Thread):
                 return True
             else:
                 LOGGER.error("exception in socket verification")
-				#FIXME : perform more tests on linux
-                return True
+                sock = None
+                return False
+                raise e
         else:
             sock.close()
             sock = None
@@ -431,7 +434,7 @@ class Naming(Thread):
         with self._serviceslock:
             death_list = []
             for name, endpoint in self.remote_services.items():
-                if endpoint.contains(addrinfo):
+                if addrinfo in endpoint:
                     death_list.append(name)
             for remote in death_list:
                 self.remote_services.pop(remote)

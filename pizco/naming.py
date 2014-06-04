@@ -5,8 +5,6 @@
 
     Implements a Naming service
 
-	It sends broadcast on udp port 9999
-	
     :copyright: 2013 by Hernan E. Grecco, see AUTHORS for more details.
     :license: BSD, see LICENSE for more details.
 """
@@ -188,9 +186,8 @@ class PeerWatcher(Thread):
                 return True
             else:
                 LOGGER.error("exception in socket verification")
-                sock = None
-                return False
-                raise e
+				#FIXME : perform more tests on linux
+                return True
         else:
             sock.close()
             sock = None
@@ -451,7 +448,6 @@ class Naming(Thread):
 
     def on_peer_birth(self, addrinfo):
         if not self.peer_proxies.has_key(addrinfo):
-            LOGGER.debug("#################")
             LOGGER.debug(addrinfo)
             LOGGER.debug(self.get_local_ip())
             try:
@@ -459,6 +455,7 @@ class Naming(Thread):
                                    creation_timeout=2000)
             except:
                 LOGGER.error("no naming service present at %s:%s", addrinfo, self.NAMING_SERVICE_PORT)
+                rn_service = None
             else:
                 self.peer_proxies[addrinfo] = rn_service
                 custom_slot = self._make_remote_services_slot(addrinfo)

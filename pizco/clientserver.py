@@ -358,6 +358,7 @@ class ProxyAgent(Agent):
 
         if creation_timeout:
             if self.ping_server(creation_timeout) != 'ping':
+                super(ProxyAgent, self).__del__()
                 raise Exception("Timeout")
 
         ret = self.request(self.remote_rep_endpoint, 'info')

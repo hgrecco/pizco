@@ -446,7 +446,7 @@ class Agent(object):
         """
         try:
             sender, topic, content, msgid = self.protocol.parse(message)
-            LOGGER.debug("RECEIVE notification from % (topic: %s) ", sender,topic)
+            LOGGER.debug("RECEIVE notification from %s (topic: %s) ", sender,topic)
         except:
             LOGGER.debug('Invalid message %s', message)
         else:

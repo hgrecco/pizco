@@ -309,7 +309,7 @@ class Naming(Thread):
 
     sig_exportable_services = Signal(2)
 
-    def __init__(self,local_only=False, parent=None):
+    def __init__(self,local_only=False, ignore_local_ips=False, parent=None):
         super(Naming,self).__init__(name="NamingMain")
         self.daemon = True
         self._exit_e = Event()
@@ -326,6 +326,8 @@ class Naming(Thread):
         self.remote_services = {}
 
         self._local_ip = self.get_local_ip()
+        if ignore_local_ips:
+            self.ignore_ips(self._local_ip)
 
         self._serviceslock = Lock()
         self._socketlock = Lock()
@@ -391,6 +393,9 @@ class Naming(Thread):
     def __del__(self):
         self.stop()
 
+    def ignore_ips(self,addrinfo_list):
+        self._ignore_list += addrinfo_list
+        
     @staticmethod
     def start_naming_service(in_process=True, local_only=False):
         if not PeerWatcher.check_beacon_port(local_only):
@@ -447,15 +452,17 @@ class Naming(Thread):
         return remote_services_slot
 
     def on_peer_birth(self, addrinfo):
-        if not self.peer_proxies.has_key(addrinfo):
+        if (not addrinfo in self.peer_proxies) and (not addrinfo in self._ignore_list):
             LOGGER.debug(addrinfo)
-            LOGGER.debug(self.get_local_ip())
             try:
                 rn_service = Proxy("tcp://{0}:{1}".format(addrinfo, self.NAMING_SERVICE_PORT),
                                    creation_timeout=2000)
             except:
                 LOGGER.error("no naming service present at %s:%s", addrinfo, self.NAMING_SERVICE_PORT)
-                rn_service = None
+                #due to masquerading some ips must be ignored
+                LOGGER.info("adding IP to ignore list %s", addrinfo)
+                self.ignore_ips([addrinfo])
+
             else:
                 self.peer_proxies[addrinfo] = rn_service
                 custom_slot = self._make_remote_services_slot(addrinfo)

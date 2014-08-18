@@ -17,7 +17,7 @@ import threading
 import traceback
 from collections import defaultdict
 
-from multiprocessing import Process
+from multiprocessing import Process, Manager
 import multiprocessing as mp
 
 from . import LOGGER
@@ -27,7 +27,6 @@ from .compat import futures
 
 logger = mp.log_to_stderr()
 logger.setLevel(mp.SUBDEBUG)
-
 
 HIDE_TRACEBACK = os.environ.get('PZC_HIDE_TRACEBACK', True)
 
@@ -95,16 +94,13 @@ def PSMessage(action, options):
     return 'PSMessage', action, options
 
 
-def ServerLauncher(*args):
+def ServerLauncher(*args, **kwargs):
     import time
+    final_rep_endpoint = kwargs.pop("final_rep_endpoint",[])
     s = Server(*args)
-    #while not s._running:
-    #    time.sleep(0.2)
-    #while s._running:
-    #    time.sleep(0.2)
+    final_rep_endpoint.append(s.rep_endpoint)
     time.sleep(5)
     s.serve_forever()
-    
     
 class Server(Agent):
     """Serves an object for remote access from a Proxy. A Server can serve a single object.
@@ -249,40 +245,66 @@ class Server(Agent):
             LOGGER.debug('Disconnecting %s signal on server', topic)
             signal.disconnect(self.signal_calls[topic])
             del self.signal_calls[topic]
-
+            
+    @staticmethod
+    def pick_free_port(bind_address):
+        import socket
+        """ Picks a free port """
+        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        bind_address = bind_address.replace("*","0.0.0.0")
+        test_socket.bind((bind_address, 0))
+        free_port = int(test_socket.getsockname()[1])
+        test_socket.close()
+        return free_port
+        
     @classmethod
     def serve_in_thread(cls, served_cls, args, kwargs,
-                        rep_endpoint, pub_endpoint='tcp://127.0.0.1:0'):
-        t = threading.Thread(target=cls, args=(None, rep_endpoint, pub_endpoint))
+                        rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0'):
+
+        final_rep_endpoint = []
+        print("starting remote server with availlable endpoint",rep_endpoint)
+        t = threading.Thread(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint),kwargs={"final_rep_endpoint":final_rep_endpoint})
+
         t.start()
         import time
-        time.sleep(1)
+        time.sleep(1.5)
+        rep_endpoint = final_rep_endpoint[0]
+
         if rep_endpoint.find("*") != -1:
             pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
         else:
             pxy_endpoint = rep_endpoint
+        print("connecting remote server with availlable pxy endpoint",pxy_endpoint)
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
+        proxy._proxy_inspection()
+
         return proxy
+
+
 
     @classmethod
     def serve_in_process(cls, served_cls, args, kwargs,
                          rep_endpoint, pub_endpoint='tcp://127.0.0.1:0',
                          verbose=False, gui=False):
-        #cwd = os.path.dirname(inspect.getfile(served_cls))
-        #launch(cwd, rep_endpoint, pub_endpoint, verbose, gui)
-        #mp.set_start_method("forkserver")
-        p = Process(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint))
+
+        manager = Manager()
+        final_rep_endpoint = manager.list()
+        p = Process(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint),kwargs={"final_rep_endpoint":final_rep_endpoint})
         p.daemon=True
         p.start()
         import time
-        time.sleep(1)
+        time.sleep(1.5)
+        rep_endpoint = final_rep_endpoint[0]
+
         if rep_endpoint.find("*") != -1:
             pxy_endpoint = rep_endpoint.replace("*", "127.0.0.1")
         else:
             pxy_endpoint = rep_endpoint
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
+        proxy._proxy_inspection()
+
         return proxy
 
     def serve_forever(self):
@@ -366,14 +388,28 @@ class ProxyAgent(Agent):
 
         LOGGER.debug('Started Proxy pointing to REP: %s and PUB: %s',
                      self.remote_rep_endpoint, self.remote_pub_endpoint)
+
         #self._signals = defaultdict(Signal)
         self._signals = SignalDict(self.request_server)
-
         #: Maps msgid to future object.
         self._futures = {}
         #: Subscribe to notifications when a future is finished.
         self.subscribe(self.remote_rep_endpoint, '__future__',
                        self.on_future_completed, self.remote_pub_endpoint)
+
+    def inspection(self):
+        self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self.request_server('inspect', {})
+        # TODO build signals here
+        for k in self._proxy_signals:
+            remote_endpoint = self.remote_rep_endpoint
+            pub_endpoint = self.remote_pub_endpoint
+            if pub_endpoint.find("*") != -1:
+                signal_endpoint = "tcp://*:"+remote_endpoint.split(":")[-1]
+            else:
+                signal_endpoint = remote_endpoint
+            self._signals[(signal_endpoint, k)] = \
+                self._signals[(signal_endpoint, k)]
+        return self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals
 
     def ping_server(self,timeout=5000):
         return self.request_polled(self.remote_rep_endpoint, "ping", timeout)
@@ -418,6 +454,10 @@ class ProxyAgent(Agent):
         #the remote rep endpoint is ignored in the server sending with it is not possible on multiple threads
         #TODO : check if its compliant to multiple object
         #fixing connection with wildcard adresses
+        #LOGGER.debug(("signal_manager",action,signal_name,fun))
+        #LOGGER.debug(("signal_manager",self._signals))
+
+
         if self.remote_pub_endpoint.find("*") != -1:
             defined_endpoint = self.remote_rep_endpoint.replace("/", "").split(":")
             defined_endpoint[1] = "//*"
@@ -429,15 +469,18 @@ class ProxyAgent(Agent):
             if not self._signals[(signal_endpoint, signal_name)].slots:
                 self.subscribe(self.remote_rep_endpoint, signal_name, None, self.remote_pub_endpoint)
             self._signals[(signal_endpoint, signal_name)].connect(fun)
+
         elif action == 'disconnect':
             self._signals[(signal_endpoint, signal_name)].disconnect(fun)
             if not self._signals[(signal_endpoint, signal_name)].slots:
                 self.unsubscribe(self.remote_rep_endpoint, signal_name, self.remote_pub_endpoint)
+
         elif action == 'emit':
             #TODO: Emit signal in the server!
             pass
         else:
             raise ValueError(action)
+
                         
     def on_future_completed(self, sender, topic, content, msgid):
         fut = self._futures[content['msgid']]
@@ -448,17 +491,18 @@ class ProxyAgent(Agent):
 
     def on_notification(self, sender, topic, content, msgid):
         try:
-            if (sender,topic) in self._signals:
+            if (str(sender),str(topic)) in self._signals:
                 self._signals[(sender, topic)].emit(*content[0], **content[1])
                 #self._signals[(sender, topic)].emit(*content)
             else:
-                LOGGER.warning("not supposed to happen")
+                LOGGER.error("Signal receive does not match _signals list retrieved from server : ERROR in signal list/ERROR in signal received")
                 raise KeyError
         except KeyError:
             super(ProxyAgent, self).on_notification(
                 sender, topic, content, msgid)
 
     def instantiate(self, served_cls, args, kwargs):
+        LOGGER.debug("instanciate class")
         if not isinstance(served_cls, str):
             served_cls = served_cls.__module__ + '.' + served_cls.__name__
         self.request_server('instantiate', {'class': served_cls, 'args': args, 'kwargs': kwargs})
@@ -482,15 +526,10 @@ class Proxy(object):
     """
     def __init__(self, remote_endpoint,creation_timeout=0):
         self._proxy_agent = ProxyAgent(remote_endpoint, creation_timeout)
-        self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self._proxy_agent.request_server('inspect', {})
-        # TODO build signals here
-        for k in self._proxy_signals:
-            if self._proxy_agent.remote_pub_endpoint.find("*") != -1:
-                signal_endpoint = "tcp://*:"+remote_endpoint.split(":")[-1]
-            else:
-                signal_endpoint = remote_endpoint
-            self._proxy_agent._signals[(signal_endpoint, k)] = \
-                self._proxy_agent._signals[(signal_endpoint, k)]
+        self._proxy_attr_as_remote = []
+        self._proxy_attr_as_object = []
+        self._proxy_signals = {}
+        self._proxy_inspection()
 
     def __getattr__(self, item):
         if item.startswith('_proxy_'):
@@ -514,6 +553,9 @@ class Proxy(object):
 
     def _proxy_stop_me(self):
         self._proxy_agent.stop()
+
+    def _proxy_inspection(self):
+        self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self._proxy_agent.inspection()
 
     def __del__(self):
         if hasattr(super(Proxy, self), "_proxy_agent"):

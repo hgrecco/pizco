@@ -45,6 +45,22 @@ try:
 except ImportError:
     from queue import Queue, Empty
 
+if PYTHON3:
+    _iterkeys = "keys"
+    _itervalues = "values"
+    _iteritems = "items"
+    _iterlists = "lists"
+else:
+    _iterkeys = "iterkeys"
+    _itervalues = "itervalues"
+    _iteritems = "iteritems"
+    _iterlists = "iterlists"
+
+def iteritems(d, **kw):
+    """Return an iterator over the (key, value) pairs of a dictionary."""
+    return iter(getattr(d, _iteritems)(**kw))
+
+	
 try:
     # location in Python 2.7 and 3.1
     from weakref import WeakSet

@@ -19,6 +19,7 @@ __all__ = ['Naming', ]
 import socket
 import time
 import zmq
+import os
 
 from threading import Lock, Thread, Event
 try:
@@ -31,9 +32,12 @@ from functools import partial
 
 from .compat import Queue, Empty, u
 
+PZC_BEACON_PORT = os.environ.get('PZC_BEACON_PORT', 9999)
+PZC_NAMING_PORT = os.environ.get('PZC_NAMING_PORT', 5777)
+
 
 class PeerWatcher(Thread):
-    PING_PORT_NUMBER = 9999
+    PING_PORT_NUMBER = PZC_BEACON_PORT
     PING_MSG_SIZE = 1
     PING_INTERVAL = 1 # Once per second
     LIFE_INTERVAL = 3
@@ -301,7 +305,7 @@ class ServicesWatcher(Thread):
 
 
 class Naming(Thread):
-    NAMING_SERVICE_PORT = 5777
+    NAMING_SERVICE_PORT = PZC_NAMING_PORT
 
     #sig_remote_services = Signal()
     sig_register_local_service = Signal(2)
@@ -326,6 +330,7 @@ class Naming(Thread):
         self.remote_services = {}
 
         self._local_ip = self.get_local_ip()
+        self._ignore_list = []
         if ignore_local_ips:
             self.ignore_ips(self._local_ip)
 

@@ -403,6 +403,10 @@ class Naming(Thread):
         
     @staticmethod
     def start_naming_service(in_process=True, local_only=False):
+        #TODO dispatch options:
+        #1. only proxy if availlable
+        #2. start Windows freezed version from pizco-utils (from PZC_UTILS_PATH environ)
+        #3. start with serve/in thread in process or use proxy (actual standard way)
         if not PeerWatcher.check_beacon_port(local_only):
             if local_only:
                 address = "127.0.0.1"

@@ -409,10 +409,21 @@ if __name__ == "__main__":
     #import multiprocessing as mp
     #mp.log_to_stderr(logging.DEBUG)
     #mp.get_logger().setLevel(logging.DEBUG)
+    Naming.set_ignore_local_ip(False)
+    Server.set_default_ioloop("new")
+    Naming.set_service_watcher_method("socket")
 
+    print("config 1., separate loop's threads")
+    configure_test(logging.WARNING,False)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+    print("config 1b., running in process")
+    configure_test(logging.WARNING,True)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+    
     Server.set_default_ioloop("instance")
     print("config 2, single loop instance threads")
-
     print("config 2b., running in process")
     configure_test(logging.WARNING,False)
     suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
@@ -427,12 +438,13 @@ if __name__ == "__main__":
     unittest.TextTestRunner(verbosity=2).run(suite)
 
     Naming.set_ignore_local_ip(False)
+    Naming.set_service_watcher_method("pizco")
     Server.set_default_ioloop("new")
-    print("config 1., separate loop's threads")
+    print("config 3., service watcher : PIZCO PROXY")
     configure_test(logging.WARNING,False)
     suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
     unittest.TextTestRunner(verbosity=2).run(suite)
-    print("config 1b., running in process")
+    print("config 3., service watcher : PIZCO PROXY in PROCESS")
     configure_test(logging.WARNING,True)
     suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
     unittest.TextTestRunner(verbosity=2).run(suite)

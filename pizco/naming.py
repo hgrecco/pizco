@@ -365,8 +365,8 @@ class ServicesWatcher(Thread):
 global default_ignore_local_ip
 default_ignore_local_ip = True
 
-global default_service_checker
-default_service_checker = True
+global default_service_watcher_method
+default_service_watcher_method = "socket"
 
 class Naming(Thread):
     NAMING_SERVICE_PORT = PZC_NAMING_PORT

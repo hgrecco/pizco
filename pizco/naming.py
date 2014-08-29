@@ -653,9 +653,7 @@ class Naming(Thread):
             self.remote_services.pop(service_name)
         
     def test__peer_death(self):
-        LOGGER.debug("disconnect")
-        #self._pwatcher.sig_peer_event.disconnect()
-        LOGGER.debug("disconnect done")
+        self._pwatcher.sig_peer_event.disconnect()
 
     def test__peer_death_end(self):
         self._pwatcher.sig_peer_event.connect(self._pwatcher.on_peer_event)

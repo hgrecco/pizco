@@ -273,7 +273,6 @@ class Server(Agent):
                         rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0'):
 
         final_rep_endpoint = []
-        LOGGER.debug("starting remote server with availlable endpoint {}".format(rep_endpoint))
         t = threading.Thread(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint),kwargs={"final_rep_endpoint":final_rep_endpoint})
 
         t.start()
@@ -286,7 +285,6 @@ class Server(Agent):
         else:
             pxy_endpoint = rep_endpoint
 
-        LOGGER.debug("connecting remote server with availlable pxy endpoint {} ".format(pxy_endpoint))
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         proxy._proxy_inspection()

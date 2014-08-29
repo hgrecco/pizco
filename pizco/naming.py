@@ -134,7 +134,6 @@ class PeerWatcher(Thread):
     def _end_beacon(self):
         if hasattr(self,"_sock"):
             self._poller.unregister(self._sock)
-            self._sock.shutdown(socket.SHUT_RDWR)
             self._sock.close()
             self._sock = None
             del self._sock
@@ -154,7 +153,7 @@ class PeerWatcher(Thread):
             self.sig_peer_event.emit(addrinfo[0])
 
     def _beacon_send_job(self):
-        #LOGGER.debug(("Pinging peersâ¦"))
+        #LOGGER.debug(("Pinging peers"))
         self._sock.sendto(b'!', 0, ("255.255.255.255", self.PING_PORT_NUMBER))
         self.ping_at = time.time() + self.PING_INTERVAL
         #LOGGER.debug(time.time())
@@ -247,7 +246,8 @@ class ProxyChecker(object):
         else:
             return False
     def __del__(self):
-        del self.pxy
+        if hasattr(self,pxy):
+            del self.pxy
         
 
 class ServicesWatcher(Thread):
@@ -255,7 +255,7 @@ class ServicesWatcher(Thread):
     CHECK_INTERVAL = 1
     sig_service_death = Signal(1)
 
-    def __init__(self, method="pizco"):
+    def __init__(self, method="socket"):
         assert(method in ["pizco","socket"])
         if method == "pizco":
             self.CheckClass = ProxyChecker
@@ -365,6 +365,9 @@ class ServicesWatcher(Thread):
 global default_ignore_local_ip
 default_ignore_local_ip = True
 
+global default_service_checker
+default_service_checker = True
+
 class Naming(Thread):
     NAMING_SERVICE_PORT = PZC_NAMING_PORT
 
@@ -374,7 +377,7 @@ class Naming(Thread):
 
     sig_exportable_services = Signal(2)
 
-    def __init__(self,local_only=False, ignore_local_ips=default_ignore_local_ip, check_mode = "socket"):
+    def __init__(self,local_only=False, ignore_local_ips=default_ignore_local_ip, check_mode = default_service_watcher_method):
         super(Naming,self).__init__(name="NamingMain")
         self.daemon = True
         
@@ -430,6 +433,11 @@ class Naming(Thread):
         global default_ignore_local_ip
         default_ignore_local_ip = ignore
 
+    @staticmethod
+    def set_service_watcher_method(method):
+        global default_service_watcher_method
+        default_service_watcher_method = method
+        
     def run(self):
         while not self._exit_e.isSet():
             if self._job_e.isSet():
@@ -653,7 +661,9 @@ class Naming(Thread):
             self.remote_services.pop(service_name)
         
     def test__peer_death(self):
-        self._pwatcher.sig_peer_event.disconnect()
+        LOGGER.debug("disconnect")
+        #self._pwatcher.sig_peer_event.disconnect()
+        LOGGER.debug("disconnect done")
 
     def test__peer_death_end(self):
         self._pwatcher.sig_peer_event.connect(self._pwatcher.on_peer_event)

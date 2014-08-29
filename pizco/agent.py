@@ -40,7 +40,7 @@ class AgentManager(object):
         try:
             cls.agents[loop].add(agent)
         except KeyError:
-            LOGGER.debug("starting the loop {}".format(loop))
+            LOGGER.debug("starting the loop {}".format(id(loop)))
             t = threading.Thread(target=loop.start, name='ioloop-{0}'.format(id(loop)))
             cls.agents[loop] = set([agent, ])
             cls.threads[loop] = t
@@ -51,7 +51,7 @@ class AgentManager(object):
 
     @classmethod
     def remove(cls, agent):
-        LOGGER.debug("removing agent {}".format(agent,agent.rep_endpoint))
+        LOGGER.debug("removing agent {}".format(type(agent),agent.rep_endpoint))
 
         loop = agent.loop
         if agent in cls.agents[loop]:
@@ -64,7 +64,7 @@ class AgentManager(object):
         #only remove create the removal of the element (_proxy_stop_me, _proxy_stop_server)
 
         if (cls.agents[loop]) and (not loop in cls.in_use) and (loop != ioloop.IOLoop.instance()):
-            LOGGER.debug("removing the loop {}".format(loop))
+            LOGGER.debug("removing the loop {}".format(id(loop)))
             cls.in_use.remove(loop)
             loop.add_callback(loop.close)
             if not cls.is_loop_in_current_thread(loop):
@@ -202,7 +202,7 @@ class Agent(object):
             LOGGER.error("closing an allready closed stream")
             return
         else:
-            LOGGER.debug("close stream {}".format(stream))
+            LOGGER.debug("close stream {}".format(str(stream)))
         stream.on_recv(None)
         stream.flush()
         stream.close()

@@ -22,14 +22,14 @@ import multiprocessing as mp
 
 from . import LOGGER
 from .util import Signal
-from .agent import Agent
+from .agent import Agent, default_io_loop
 from .compat import futures
 
-logger = mp.log_to_stderr()
-logger.setLevel(mp.SUBDEBUG)
+#logger = mp.log_to_stderr()
+#logger.setLevel(mp.SUBDEBUG)
 
 HIDE_TRACEBACK = os.environ.get('PZC_HIDE_TRACEBACK', True)
-
+CREATION_TIMEOUT = os.environ.get('PZC_CREATION_TIMEOUT',2.5)
 
 class RemoteAttribute(object):
     """Representing a remote attribute that can handle
@@ -78,7 +78,7 @@ class RemoteAttribute(object):
         LOGGER.debug('Connecting %s to %s', self.name, fun)
         self.signal_manager('connect', self.name, fun)
 
-    def disconnect(self, fun):
+    def disconnect(self, fun=None):
         self.signal_manager('disconnect', self.name, fun)
 
     #def emit(self, value, old_value, other):
@@ -118,6 +118,8 @@ class Server(Agent):
             if rep_endpoint.find("*") != -1:
                 pub_endpoint = pub_endpoint.replace("127.0.0.1", "*")
             self.served_object = served_object
+            if served_object is None:
+                self.did_instantiate = False
             self.signal_calls = {}
             super(Server, self).__init__(rep_endpoint, pub_endpoint, ctx, loop)
         except:
@@ -236,6 +238,15 @@ class Server(Agent):
             self.signal_calls[topic] = fun
             signal.connect(self.signal_calls[topic])
 
+    def unsubscribe(self, rep_endpoint, topic, pub_endpoint=None):
+        if self.remote_pub_endpoint.startswith("tcp://*"):
+                defined_endpoint = self.remote_rep_endpoint.replace("/","").split(":")
+                defined_endpoint[1] = "//*"
+                rep_endpoint = ":".join(defined_endpoint)
+
+        super(ProxyAgent,self).unsubscripe(rep_endpoint,topic,pub_endpoint)
+
+
     def on_unsubscribe(self, topic, count):
         try:
             signal = getattr(self.served_object, topic)
@@ -262,19 +273,20 @@ class Server(Agent):
                         rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0'):
 
         final_rep_endpoint = []
-        print("starting remote server with availlable endpoint",rep_endpoint)
+        LOGGER.debug("starting remote server with availlable endpoint {}".format(rep_endpoint))
         t = threading.Thread(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint),kwargs={"final_rep_endpoint":final_rep_endpoint})
 
         t.start()
-        import time
-        time.sleep(1.5)
+        while not final_rep_endpoint:
+            pass
         rep_endpoint = final_rep_endpoint[0]
 
         if rep_endpoint.find("*") != -1:
             pxy_endpoint = rep_endpoint.replace("*","127.0.0.1")
         else:
             pxy_endpoint = rep_endpoint
-        print("connecting remote server with availlable pxy endpoint",pxy_endpoint)
+
+        LOGGER.debug("connecting remote server with availlable pxy endpoint {} ".format(pxy_endpoint))
         proxy = Proxy(pxy_endpoint)
         proxy._proxy_agent.instantiate(served_cls, args, kwargs)
         proxy._proxy_inspection()
@@ -286,15 +298,17 @@ class Server(Agent):
     @classmethod
     def serve_in_process(cls, served_cls, args, kwargs,
                          rep_endpoint, pub_endpoint='tcp://127.0.0.1:0',
+                         daemon=True,
                          verbose=False, gui=False):
 
         manager = Manager()
         final_rep_endpoint = manager.list()
         p = Process(target=ServerLauncher, args=(None, rep_endpoint, pub_endpoint),kwargs={"final_rep_endpoint":final_rep_endpoint})
-        p.daemon=True
+        p.daemon=daemon
         p.start()
         import time
-        time.sleep(1.5)
+        while not final_rep_endpoint:
+            pass
         rep_endpoint = final_rep_endpoint[0]
 
         if rep_endpoint.find("*") != -1:
@@ -309,7 +323,7 @@ class Server(Agent):
 
     def serve_forever(self):
         self.join()
-        LOGGER.debug('Server stopped')
+        LOGGER.debug('Server stopped {} {} '.format(self,self.rep_endpoint))
 
     def return_as_remote(self, attr):
         """Return True if the object must be returned as a RemoteAttribute.
@@ -376,6 +390,9 @@ class ProxyAgent(Agent):
     def __init__(self, remote_rep_endpoint, creation_timeout=0):
         super(ProxyAgent, self).__init__()
 
+        self._remote_stopping = threading.Event()
+        self._remote_stopping.clear()
+
         self.remote_rep_endpoint = remote_rep_endpoint
 
         if creation_timeout:
@@ -396,6 +413,11 @@ class ProxyAgent(Agent):
         #: Subscribe to notifications when a future is finished.
         self.subscribe(self.remote_rep_endpoint, '__future__',
                        self.on_future_completed, self.remote_pub_endpoint)
+
+        self.subscribe(self.remote_rep_endpoint, '__status__',
+                       self.on_status_changed, self.remote_pub_endpoint)
+
+        #FIXME subscribe to server end signal
 
     def inspection(self):
         self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self.request_server('inspect', {})
@@ -437,10 +459,13 @@ class ProxyAgent(Agent):
             exc, traceback_text = ret_options
             exc._pzc_traceback = traceback_text
             raise exc
+
         elif ret_action == 'remote':
             return RemoteAttribute(options['name'], self.request_server, self.signal_manager)
+
         elif ret_action == 'return':
             return ret_options
+
         elif ret_action == 'future_register':
             fut = futures.Future()
             fut.set_running_or_notify_cancel()
@@ -481,6 +506,15 @@ class ProxyAgent(Agent):
         else:
             raise ValueError(action)
 
+    def on_status_changed(self,sender,topic,content,msgid):
+        if content == 'stop':
+            self._remote_stopping.set()
+
+    def server_stopped(self):
+        return self._remote_stopping.isSet()
+
+    def wait_server_stop(self,timeout=None):
+        return self._remote_stopping.wait(timeout)
                         
     def on_future_completed(self, sender, topic, content, msgid):
         fut = self._futures[content['msgid']]
@@ -519,12 +553,29 @@ def set_excepthook():
     sys.excepthook = _except_hook
 
 
+import socket
+def check_port_opened(ip,port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((ip,port))
+    if result == 0:
+       return True
+    else:
+       sock.close()
+       del sock
+       return False
+
+def endpoint_to_connection(endpoint):
+    edp = endpoint.split(":")
+    ip = edp[1].replace("/","")
+    port = int(edp[-1])
+    return ip,port
+
 class Proxy(object):
     """Proxy object to access a server.
 
     :param remote_endpoint: endpoint of the server.
     """
-    def __init__(self, remote_endpoint,creation_timeout=0):
+    def __init__(self, remote_endpoint,creation_timeout=0, ):
         self._proxy_agent = ProxyAgent(remote_endpoint, creation_timeout)
         self._proxy_attr_as_remote = []
         self._proxy_attr_as_object = []
@@ -532,27 +583,54 @@ class Proxy(object):
         self._proxy_inspection()
 
     def __getattr__(self, item):
+
         if item.startswith('_proxy_'):
             return super(Proxy,self).__getattr__(item)
+
+        if self._proxy_agent.server_stopped():
+            raise Exception("Server Stopped!!!")
         if item in self._proxy_attr_as_remote:
             return RemoteAttribute(item, self._proxy_agent.request_server, self._proxy_agent.signal_manager)
+
         return self._proxy_agent.request_server('get', {'name': item}, item in self._proxy_attr_as_object)
 
     def __setattr__(self, item, value):
         if item.startswith('_proxy_'):
             super(Proxy, self).__setattr__(item, value)
             return
-
+        if self._proxy_agent.server_stopped():
+            raise Exception("Server Stopped!!!")
         return self._proxy_agent.request_server('setattr', {'name': item, 'value': value})
 
     def _proxy_ping(self,ping_timeout=3000):
         return self._proxy_agent.ping_server(ping_timeout)
 
+    def _proxy_started(self):
+        return self._proxy_agent.started()
+
+    def _proxy_wait_start(self,timeout=3):
+        return self._proxy_agent.wait_start(timeout)
+
+    def _proxy_stopped(self):
+        return self._proxy_agent.stopped()
+
+    def _proxy_wait_stop(self,timeout=5):
+        return self._proxy_agent.wait_stop(timeout)
+
     def _proxy_stop_server(self):
         self._proxy_agent.request(self._proxy_agent.remote_rep_endpoint, 'stop')
+        self._proxy_agent.wait_server_stop()
+        while check_port_opened(*endpoint_to_connection(self._proxy_agent.remote_rep_endpoint)):
+            import time
+            time.sleep(0.5)
 
+
+    def _proxy_rep_endpoint(self):
+        return self._proxy_agent.remote_rep_endpoint
+        
     def _proxy_stop_me(self):
         self._proxy_agent.stop()
+        self._proxy_wait_stop()
 
     def _proxy_inspection(self):
         self._proxy_attr_as_remote, self._proxy_attr_as_object, self._proxy_signals = self._proxy_agent.inspection()
@@ -560,3 +638,4 @@ class Proxy(object):
     def __del__(self):
         if hasattr(super(Proxy, self), "_proxy_agent"):
             self._proxy_agent.stop()
+            self._proxy_wait_stop()

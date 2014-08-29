@@ -19,7 +19,6 @@ def configure_test(level, process):
     test_log_level = level
     perform_test_in_process = process
 
-
 configure_test(logging.INFO,False)
 
 
@@ -132,7 +131,9 @@ class RandomTestData(object):
 class TestNamingService(unittest.TestCase):
     def testPeerWatcher(self):
         LOGGER.setLevel(test_log_level)
+
         while PeerWatcher.check_beacon_port():
+            print("Suspecting naming service to be running")
             LOGGER.info("trying to stop naming service")
             ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()
@@ -146,12 +147,12 @@ class TestNamingService(unittest.TestCase):
         print(pw.peers_list)
         pw.stop()
         del pw
-        time.sleep(1)
 
     def testServiceWatcher(self):
         LOGGER.setLevel(test_log_level)
         while PeerWatcher.check_beacon_port():
-            print(LOGGER.info("trying to stop naming service"))
+            print ("checking beacon port saying it's not free")
+            LOGGER.info("trying to stop naming service")
             ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()
             del ns
@@ -163,15 +164,17 @@ class TestNamingService(unittest.TestCase):
         ns.sig_register_local_service.connect(sw.register_local_proxy)
         ns.sig_unregister_local_service.connect(sw.unregister_local_proxy)
         sw.start()
+
         to = TestObject()
         s = Server(to,rep_endpoint="tcp://*:500")
         ns.sig_register_local_service.emit("myremote","tcp://*:500")
-        LOGGER.info(sw._local_proxies)
+
+        LOGGER.info(sw._local_services)
         time.sleep(2)
         s.stop()
         del s
         time.sleep(2)
-        LOGGER.info(sw._local_proxies)
+        LOGGER.info(sw._local_services)
         sw.stop()
         del sw
         time.sleep(2)
@@ -179,6 +182,7 @@ class TestNamingService(unittest.TestCase):
         del ns
 
     def testNormalCaseServiceDeath(self):
+        Naming.set_ignore_local_ip(False)
         LOGGER.setLevel(test_log_level)
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         self.assertNotEqual(ns, None)
@@ -186,16 +190,18 @@ class TestNamingService(unittest.TestCase):
         #local_pxy = Proxy("tcp://127.0.0.1:5777",300)
         to = TestObject()
         s = Server(to,rep_endpoint="tcp://*:500")
-        time.sleep(1)
         ns.register_local_service("myremote", "tcp://*:500")
-        ns.test_peer_death()
+        time.sleep(0.5)
+        x = ns.get_endpoint("myremote")
+        ns.test__peer_death()
         self.assertEqual(ns.get_services(),
                          {'myremote': 'tcp://127.0.0.1:500',
                           'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+0.5)*PeerWatcher.PEER_LIFES_AT_START)
-        ns.test_peer_death_end()
         LOGGER.info("simulation of server object crash")
-        addproxy = Proxy(ns.get_endpoint("myremote"))
+        ns.test__peer_death_end()
+        x = ns.get_endpoint("myremote")
+        addproxy = Proxy(x,creation_timeout=3000)
         addproxy._proxy_stop_server()
         del addproxy
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+5)) #ping standard time
@@ -204,7 +210,6 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
-        time.sleep(5)
 
     def testNormalCase(self):
         LOGGER.setLevel(test_log_level)
@@ -226,7 +231,6 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
-        time.sleep(2)
 
 
     def testARemoteCase(self):
@@ -276,7 +280,6 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
-        time.sleep(2)
 
     def testARemoteCaseMulti(self):
         #endpoint = "ipc://robbie-the-robot" not supported in windows
@@ -346,13 +349,91 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
-        time.sleep(1)
+    def testBasicStartStopStart(self):
+        LOGGER.setLevel(test_log_level)
+        ns = Naming.start_naming_service(in_process=False)
+        to = TestObject()
+        s = Server(to,rep_endpoint="tcp://*:500")
+        print("registering service")
+        pxy = Proxy("tcp://127.0.0.1:500")
+        print(pxy)
+        ns.register_local_service("myremote", "tcp://*:500")
+        print(ns.get_services())
+        print("reading endpoint")
+        print(ns.get_endpoint("myremote"))
+        time.sleep(0.5)
+        print("stopping server")
+        assert("myremote" in ns.get_services())
+        s.stop()
+        print("waiting")
+        time.sleep(4)
+        print("trying to read services")
+        print(ns.get_services())
+        assert(not "myremote" in ns.get_services())
+        time.sleep(2)
+        print("stopping naming server")
+        ns._proxy_stop_server()
+        ns._proxy_stop_me()
+        del ns
 
+        assert(not PeerWatcher.check_beacon_port())
+        #port is availlable
+
+        print("reperforming the test")
+        ns = Naming.start_naming_service(in_process=False)
+        to = TestObject()
+        s = Server(to,rep_endpoint="tcp://*:500")
+        print("registering service")
+        ns.register_local_service("myremote", "tcp://*:500")
+        print(ns.get_services())
+        print("reading endpoint")
+        print(ns.get_endpoint("myremote"))
+        time.sleep(0.5)
+        print("stopping server")
+        s.stop()
+        s.wait_stop()
+        assert("myremote" in ns.get_services())
+        print("waiting")
+        time.sleep(3)
+        print("trying to read services")
+        print(ns.get_services())
+        assert(not "myremote" in ns.get_services())
+
+        time.sleep(5)
+        ns._proxy_stop_server()
+        ns._proxy_stop_me()
+        del ns
+        print("done")
 
 if __name__ == "__main__":
-    unittest.main()
-    freeze_support()
-    LOGGER.setLevel(logging.DEBUG)
-    ns = Naming.start_naming_service()
-    import time
-    time.sleep(5)
+    #import multiprocessing as mp
+    #mp.log_to_stderr(logging.DEBUG)
+    #mp.get_logger().setLevel(logging.DEBUG)
+
+    Server.set_default_ioloop("instance")
+    print("config 2, single loop instance threads")
+
+    print("config 2b., running in process")
+    configure_test(logging.WARNING,False)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+
+    print("config 2b., running in process")
+    configure_test(logging.WARNING,True)
+    suite = unittest.TestLoader()
+    suite.loadTestsFromTestCase(TestNamingService)
+    #suite = unittest.TestSuite()
+    #suite.addTest(TestNamingService("testNormalCaseServiceDeath"))
+    unittest.TextTestRunner(verbosity=2).run(suite)
+
+    Naming.set_ignore_local_ip(False)
+    Server.set_default_ioloop("new")
+    print("config 1., separate loop's threads")
+    configure_test(logging.WARNING,False)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+    print("config 1b., running in process")
+    configure_test(logging.WARNING,True)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+

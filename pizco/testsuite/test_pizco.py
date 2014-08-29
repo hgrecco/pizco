@@ -19,7 +19,7 @@ def set_zmq_context_to_none():
 
 from pizco import Proxy, Server, Agent, Signal
 from pizco.protocol import Protocol
-from pizco.compat import unittest
+from pizco.compat import unittest, PYTHON3
 
 
 PROTOCOL_HEADER = Protocol.HEADER
@@ -182,7 +182,7 @@ import random
 class RandomTestData(object):
     def __init__(self,size=1024):
         random.seed()
-        self.rand = random.sample(xrange(10000000), size)
+        self.rand = random.sample(range(0,10000000), size)
     def __repr__(self):
         return str(self.rand[0:5])[:-1]+'...'+str(self.rand[-5:])[1:]
 
@@ -791,4 +791,4 @@ class AgentTest(unittest.TestCase):
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(AgentTest)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.TextTestRunner(verbosity=100).run(suite)

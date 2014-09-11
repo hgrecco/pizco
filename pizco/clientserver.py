@@ -235,6 +235,8 @@ class Server(Agent):
             def fun(*args, **kwargs):
                 #LOGGER.debug('ready to emit')
                 self.emit(topic, *args, **kwargs)
+
+            #Signal emission on server with this closure.
             self.signal_calls[topic] = fun
             signal.connect(self.signal_calls[topic])
 
@@ -244,7 +246,7 @@ class Server(Agent):
                 defined_endpoint[1] = "//*"
                 rep_endpoint = ":".join(defined_endpoint)
 
-        super(ProxyAgent,self).unsubscripe(rep_endpoint,topic,pub_endpoint)
+        super(ProxyAgent,self).unsubscribe(rep_endpoint,topic,pub_endpoint)
 
 
     def on_unsubscribe(self, topic, count):
@@ -364,6 +366,8 @@ class Server(Agent):
 
 
 class SignalDict(defaultdict):
+    #FIXME : Signal default dict. Signal Class Can Be Replaced to Another Type
+    #FIXME : Pass the Type Of the Signal Dict Here
     def __init__(self, request, *args, **kwargs):
         defaultdict.__init__(self, Signal, *args, **kwargs)
         self._request = request
@@ -587,6 +591,7 @@ class Proxy(object):
 
         if self._proxy_agent.server_stopped():
             raise Exception("Server Stopped!!!")
+
         if item in self._proxy_attr_as_remote:
             return RemoteAttribute(item, self._proxy_agent.request_server, self._proxy_agent.signal_manager)
 

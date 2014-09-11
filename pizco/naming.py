@@ -40,7 +40,8 @@ PZC_NAMING_PORT = os.environ.get('PZC_NAMING_PORT', 5777)
 
 class PeerWatcher(Thread):
     PING_PORT_NUMBER = PZC_BEACON_PORT
-    PING_MSG_SIZE = 1
+    BEACON_MESSAGE = b'!'
+    PING_MSG_SIZE = 1500 #len(BEACON_MESSAGE)
     PING_INTERVAL = 1 # Once per second
     LIFE_INTERVAL = 3
     PEER_LIFES_AT_START = 5
@@ -148,13 +149,22 @@ class PeerWatcher(Thread):
         events = dict(self._poller.poll(self._periodicity * 100 / 2))
         # Someone answered our ping
         if self._sock.fileno() in events:
-            msg, addrinfo = self._sock.recvfrom(self.PING_MSG_SIZE)
-            LOGGER.debug("Found peer %s: %s", addrinfo, msg)
-            self.sig_peer_event.emit(addrinfo[0])
+            try:
+                msg, addrinfo = self._sock.recvfrom(self.PING_MSG_SIZE)
+            except socket.error as e:
+                import traceback
+                LOGGER.warning("Socket error on beacon {}".traceback.format_exc(1000))
+            else:
+                if msg == b'!':
+                    LOGGER.debug("Found peer %s: %s", addrinfo, msg)
+                    self.sig_peer_event.emit(addrinfo[0])
+                else:
+                    LOGGER.warning("unknown beacon {} on port {} : msg:{}".format(addrinfo[0],self.PING_PORT_NUMBER,msg))
+
 
     def _beacon_send_job(self):
         #LOGGER.debug(("Pinging peers"))
-        self._sock.sendto(b'!', 0, ("255.255.255.255", self.PING_PORT_NUMBER))
+        self._sock.sendto(self.BEACON_MESSAGE, 0, ("255.255.255.255", self.PING_PORT_NUMBER))
         self.ping_at = time.time() + self.PING_INTERVAL
         #LOGGER.debug(time.time())
 
@@ -377,7 +387,7 @@ class Naming(Thread):
 
     sig_exportable_services = Signal(2)
 
-    def __init__(self,local_only=False, ignore_local_ips=default_ignore_local_ip, check_mode = default_service_watcher_method):
+    def __init__(self,local_only=False, ignore_local_ips=default_ignore_local_ip, check_mode =default_service_watcher_method):
         super(Naming,self).__init__(name="NamingMain")
         self.daemon = True
         
@@ -491,7 +501,69 @@ class Naming(Thread):
 
     def ignore_ips(self,addrinfo_list):
         self._ignore_list += addrinfo_list
-        
+
+    @staticmethod
+    def get_proxy_from_name(name,fallback_endpoint=None,timeout=20):
+        import time
+        ns = Naming.start_naming_service()
+        edp = ns.get_endpoint(name)
+        max_count = timeout
+        while edp is None and max_count:
+            edp = ns.get_endpoint(name)
+            if edp is not None:
+                break
+            time.sleep(1)
+            max_count -= 1
+        if edp is None:
+            if fallback_endpoint is None:
+                raise Exception("Cannot found {} in naming services, check if services are exported".format(name))
+            else:
+                endpoint = fallback_endpoint
+        else:
+            endpoint = edp
+        pxy = Proxy(endpoint,max_count*1000.)
+        return pxy
+
+    @staticmethod
+    def serve_in_thread_and_register(service_name, served_cls, args, kwargs,
+                        rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0', verbose=False, gui=False,
+                        add_hostname_prefix=False):
+
+        ns = Naming.start_naming_service()
+
+        pxy = Server.serve_in_process(served_cls=served_cls, args=args, kwargs=kwargs, rep_endpoint=rep_endpoint,
+                                pub_endpoint=pub_endpoint, verbose=verbose, gui=gui, add_hostname_prefix=add_hostname_prefix)
+
+        endpoint = pxy._proxy_rep_endpoint()
+
+        if not "127.0.0.1" in rep_endpoint:
+            endpoint = endpoint.replace("127.0.0.1","*")
+
+        print rep_endpoint
+        print endpoint
+        ns.register_local_service(service_name, endpoint, add_hostname_prefix=add_hostname_prefix)
+
+        return pxy
+
+    @staticmethod
+    def serve_in_process_and_register(service_name, served_cls, args, kwargs,
+                        rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
+                        add_hostname_prefix=False):
+
+        ns = Naming.start_naming_service()
+
+        pxy = Server.serve_in_process(served_cls=served_cls,args=args,kwargs=kwargs,rep_endpoint=rep_endpoint,
+                                pub_endpoint=pub_endpoint)
+
+        endpoint = pxy._proxy_rep_endpoint()
+
+        if not "127.0.0.1" in rep_endpoint:
+            endpoint = endpoint.replace("127.0.0.1","*")
+
+        ns.register_local_service(service_name, endpoint, add_hostname_prefix=add_hostname_prefix)
+
+        return pxy
+
     @staticmethod
     def start_naming_service(in_process=True, check_mode="socket", local_only=False):
         if not PeerWatcher.check_beacon_port(local_only):
@@ -568,6 +640,7 @@ class Naming(Thread):
         if (not addrinfo in self.peer_proxies) and (not addrinfo in self._ignore_list):
             LOGGER.debug(addrinfo)
             try:
+                print("creating proxy for remote {}".format(addrinfo))
                 rn_service = Proxy("tcp://{0}:{1}".format(addrinfo, self.NAMING_SERVICE_PORT),
                                    creation_timeout=2000)
             except:
@@ -619,7 +692,9 @@ class Naming(Thread):
     def get_exportable_services(self):
         return self.exportable_local_services
 
-    def register_local_service(self, service_name,endpoint):
+    def register_local_service(self, service_name, endpoint, add_hostname_prefix=False):
+        if add_hostname_prefix:
+            service_name = socket.gethostname() + "." + service_name
         with self._servicesRLock:
             try:
                 LOGGER.info("registering endpoint %s", endpoint)

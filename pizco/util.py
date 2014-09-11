@@ -172,6 +172,7 @@ def bind(sock, endpoint='tcp://127.0.0.1:0'):
         endpoint += ':' + str(port)
     else:
         try:
+            print endpoint
             sock.bind(endpoint)
         except Exception as e:
             from . import LOGGER

@@ -531,8 +531,8 @@ class Naming(Thread):
 
         ns = Naming.start_naming_service()
 
-        pxy = Server.serve_in_process(served_cls=served_cls, args=args, kwargs=kwargs, rep_endpoint=rep_endpoint,
-                                pub_endpoint=pub_endpoint, verbose=verbose, gui=gui, add_hostname_prefix=add_hostname_prefix)
+        pxy = Server.serve_in_thread(served_cls=served_cls, args=args, kwargs=kwargs, rep_endpoint=rep_endpoint,
+                                pub_endpoint=pub_endpoint)
 
         endpoint = pxy._proxy_rep_endpoint()
 

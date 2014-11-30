@@ -740,19 +740,15 @@ class AgentTest(unittest.TestCase):
                 if item[0] == 2:
                     ipList.append(item[4][0])
             return ipList
-        print "start"
+            
         endpoint = "tcp://*:8200"
         endpoint1 = "tcp://127.0.0.1:8200"
         endpoint2 = "tcp://"+get_local_ip()[0]+":8200"
         serverto = AggressiveServerObject()
         server = Server(serverto, rep_endpoint=endpoint)
-        print "server started"
         serverto.add_events()
-        print "added events"
         to = AggressiveClientObject()
-        print "to created"
         i = Proxy(endpoint1)
-        print "aggressive send"
         i.sig_aggressive.connect(to.slot_aggressive)
         serverto.start()
         serverto.add_events()
@@ -768,7 +764,6 @@ class AgentTest(unittest.TestCase):
         self.assertGreater(beat_before,0)
         self.assertEqual(beat_before,beat_after_pause,1)
         self.assertGreater(beat_after_unpause,beat_after_pause)
-        print ""
         i._proxy_stop_me()
         del i # necessary to perform post stop callbacks
 
@@ -795,8 +790,5 @@ class AgentTest(unittest.TestCase):
         time.sleep(5)
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite()
-    suite.addTest(AgentTest("test_wildcards"))
-    unittest.TextTestRunner(verbosity=100).run(suite)
     suite = unittest.TestLoader().loadTestsFromTestCase(AgentTest)
     unittest.TextTestRunner(verbosity=100).run(suite)

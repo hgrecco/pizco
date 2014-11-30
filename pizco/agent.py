@@ -47,6 +47,7 @@ class AgentManager(object):
             cls.in_use.add(loop)
             t.daemon = True
             t.start()
+            LOGGER.debug("loop started {}".format(id(loop)))
 
 
     @classmethod

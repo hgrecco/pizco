@@ -209,6 +209,7 @@ class TestNamingService(unittest.TestCase):
         time.sleep(1)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
+        s.stop()
         del ns
 
     def testNormalCase(self):
@@ -424,6 +425,7 @@ if __name__ == "__main__":
     
     Server.set_default_ioloop("instance")
     print("config 2, single loop instance threads")
+    
     print("config 2b., running in process")
     configure_test(logging.WARNING,False)
     suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
@@ -431,20 +433,21 @@ if __name__ == "__main__":
 
     print("config 2b., running in process")
     configure_test(logging.WARNING,True)
-    suite = unittest.TestLoader()
-    suite.loadTestsFromTestCase(TestNamingService)
-    #suite = unittest.TestSuite()
-    #suite.addTest(TestNamingService("testNormalCaseServiceDeath"))
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
     unittest.TextTestRunner(verbosity=2).run(suite)
 
+    print("config 3. Pizco type watchdog")
+    
     Naming.set_ignore_local_ip(False)
     Naming.set_service_watcher_method("pizco")
     Server.set_default_ioloop("new")
+    
     print("config 3., service watcher : PIZCO PROXY")
     configure_test(logging.WARNING,False)
     suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
     unittest.TextTestRunner(verbosity=2).run(suite)
-    print("config 3., service watcher : PIZCO PROXY in PROCESS")
+    
+    print("config 3b., service watcher : PIZCO PROXY in PROCESS")
     configure_test(logging.WARNING,True)
     suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
     unittest.TextTestRunner(verbosity=2).run(suite)

@@ -539,8 +539,6 @@ class Naming(Thread):
         if not "127.0.0.1" in rep_endpoint:
             endpoint = endpoint.replace("127.0.0.1","*")
 
-        print(rep_endpoint)
-        print(endpoint)
         ns.register_local_service(service_name, endpoint, add_hostname_prefix=add_hostname_prefix)
 
         return pxy

@@ -45,6 +45,9 @@ class TestSignal(unittest.TestCase):
 
         def arg2def1(a, b, c=1):
             pass
+        
+        def arg1def2(a, b=2, c=1):
+            pass
 
         def arg2kwargs(a, b, **kwargs):
             pass
@@ -183,12 +186,23 @@ class TestSignal(unittest.TestCase):
             s.emit(1, 2, d=4)
         with self.assertRaises(SignalError):
             s.emit(c=3)
+        print("ManualSignal")
+        sb = Signal(nargs=2, kwargs=['c'])
+        sb.connect(arg2def1)
+        sb.emit(1, 2)
+        sb.emit(1,2,c=4)
+        print("AutoSignal")
+        sa = Signal.Auto()
+        sa.connect(arg2def1)
+        sa.emit(1,2,c=4)
+        sa.emit(1,2)
 
     def test_socket_args_through_proxy(self):
         # open proxy serving Example
         # have it emit a 1 arg signal
         # watch if it becomes 3 args
         pass
+     
 
 if __name__ == '__main__':
     unittest.main()

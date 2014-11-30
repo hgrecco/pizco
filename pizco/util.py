@@ -112,18 +112,22 @@ class Signal(object):
     def Auto():
         return Signal(nargs=-1)
 
-    def _auto_match(self, nargs):
+    def _auto_match(self, nargs, kwargs = []):
         #autoconnect on first connection
         self._nargs = nargs
-        
+        self._kwargs = kwargs
+
     def _verify_slot(self, slot):
         # signal varags -> slot varargs
         # signal args -> slot args (or varargs)
         # signal kwargs -> slot kwargs
+        
         if self._nargs == -1:
             autodetect = True
         else:
             autodetect = False
+
+            
         spec = getspec(slot)
         if not spec.varargs:  # function expects args
             if self._varargs:
@@ -131,7 +135,8 @@ class Signal(object):
                     "Slot {0} does not accept varargs".format(slot))
             else:  # check nargs
                 if autodetect == True:
-                    self._auto_match(len(spec.args))
+                    return
+                    
                 maxargs = len(spec.args)
                 if maxargs < self._nargs:
                     raise SignalError(
@@ -149,14 +154,17 @@ class Signal(object):
                     "Slot {0} does not accept varkwargs".format(slot))
             else:  # signal only passes specific kwargs
                 kwargs = spec.args[::-1][:len(spec.defaults)]
+
                 if autodetect == True:
-                    self._kwargs = kwargs
+                    return
+                
                 for kw in self._kwargs:
                     if kw not in kwargs:
                         raise SignalError(
                             "Slot {0} does not accept keyword {1}".format(
                                 slot, kw))
 
+                
     def connect(self, slot):
         # add dummy connection type maybe this the place to create the
         # pyqtSignals to be able to resync with qt event loop
@@ -172,11 +180,12 @@ class Signal(object):
             self.slots.remove(slot)
 
     def _verify_emit(self, args, kwargs):
+
+        if self._nargs == -1:
+            self._auto_match(len(args),kwargs.keys())
+
         if not self._varargs:  # check args
-            if self._nargs == -1:
-                self._auto_match(len(args))
-                
-            if (len(args)+len(kwargs)) != self._nargs:
+            if (len(args)) != self._nargs:
                 raise SignalError(
                     "emit called with invalid number of args {0} / {1}".format(
                         len(args), self._nargs))

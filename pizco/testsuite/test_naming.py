@@ -172,6 +172,7 @@ class TestNamingService(unittest.TestCase):
         LOGGER.info(sw._local_services)
         time.sleep(2)
         s.stop()
+        s.wait_stop(timeout=0)
         del s
         time.sleep(2)
         LOGGER.info(sw._local_services)
@@ -210,6 +211,7 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         s.stop()
+        s.wait_stop(timeout=0)
         del ns
 
     def testNormalCase(self):
@@ -229,6 +231,8 @@ class TestNamingService(unittest.TestCase):
         time.sleep(1)
         addproxy._proxy_stop_server()
         del addproxy
+        s.stop()
+        s.wait_stop(timeout=0)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
@@ -278,6 +282,7 @@ class TestNamingService(unittest.TestCase):
         del i
         serverto.stop()
         s.stop()
+        s.wait_stop(timeout=0)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
@@ -366,6 +371,7 @@ class TestNamingService(unittest.TestCase):
         print("stopping server")
         assert("myremote" in ns.get_services())
         s.stop()
+        s.wait_stop(timeout=0)
         print("waiting")
         time.sleep(4)
         print("trying to read services")
@@ -392,7 +398,7 @@ class TestNamingService(unittest.TestCase):
         time.sleep(0.5)
         print("stopping server")
         s.stop()
-        s.wait_stop()
+        s.wait_stop(timeout=0)
         assert("myremote" in ns.get_services())
         print("waiting")
         time.sleep(3)

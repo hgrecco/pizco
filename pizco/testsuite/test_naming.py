@@ -166,8 +166,8 @@ class TestNamingService(unittest.TestCase):
         sw.start()
 
         to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        ns.sig_register_local_service.emit("myremote","tcp://*:500")
+        s = Server(to,rep_endpoint="tcp://*:6500")
+        ns.sig_register_local_service.emit("myremote","tcp://*:6500")
 
         LOGGER.info(sw._local_services)
         time.sleep(2)
@@ -189,13 +189,13 @@ class TestNamingService(unittest.TestCase):
         time.sleep(1)
         #local_pxy = Proxy("tcp://127.0.0.1:5777",300)
         to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        ns.register_local_service("myremote", "tcp://*:500")
+        s = Server(to,rep_endpoint="tcp://*:6500")
+        ns.register_local_service("myremote", "tcp://*:6500")
         time.sleep(0.5)
         x = ns.get_endpoint("myremote")
         ns.test__peer_death()
         self.assertEqual(ns.get_services(),
-                         {'myremote': 'tcp://127.0.0.1:500',
+                         {'myremote': 'tcp://127.0.0.1:6500',
                           'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+0.5)*PeerWatcher.PEER_LIFES_AT_START)
         LOGGER.info("simulation of server object crash")
@@ -217,14 +217,14 @@ class TestNamingService(unittest.TestCase):
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         self.assertNotEqual(ns, None)
         to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        ns.register_local_service("myremote","tcp://*:500")
+        s = Server(to,rep_endpoint="tcp://*:6500")
+        ns.register_local_service("myremote","tcp://*:6500")
         addproxy = Proxy(ns.get_endpoint("myremote"))
         self.assertEqual(addproxy.times(50),50)
         time.sleep(1)
         LOGGER.info(ns.get_services())
         self.assertEqual(ns.get_services(),
-                         {'myremote': 'tcp://127.0.0.1:500',
+                         {'myremote': 'tcp://127.0.0.1:6500',
                           'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(1)
         addproxy._proxy_stop_server()
@@ -358,13 +358,13 @@ class TestNamingService(unittest.TestCase):
         to = TestObject()
         for i in range(0,5):
             print("---#####TEST####---")
-            #s = Server(to,rep_endpoint="tcp://*:500")
-            s = Server.serve_in_thread(TestObject,(),{},rep_endpoint="tcp://*:500")
-            #s = Server.serve_in_process(TestObject,(),{},rep_endpoint="tcp://*:500")
+            #s = Server(to,rep_endpoint="tcp://*:6500")
+            s = Server.serve_in_thread(TestObject,(),{},rep_endpoint="tcp://*:6500")
+            #s = Server.serve_in_process(TestObject,(),{},rep_endpoint="tcp://*:6500")
             print("registering service")
-            pxy = Proxy("tcp://127.0.0.1:500")
+            pxy = Proxy("tcp://127.0.0.1:6500")
             print(pxy)
-            ns.register_local_service("myremote", "tcp://*:500")
+            ns.register_local_service("myremote", "tcp://*:6500")
             print(ns.get_services())
             print("reading endpoint")
             print(ns.get_endpoint("myremote"))

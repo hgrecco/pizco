@@ -172,7 +172,6 @@ class TestNamingService(unittest.TestCase):
         LOGGER.info(sw._local_services)
         time.sleep(2)
         s.stop()
-        s.wait_stop(timeout=0)
         del s
         time.sleep(2)
         LOGGER.info(sw._local_services)
@@ -183,7 +182,7 @@ class TestNamingService(unittest.TestCase):
         del ns
 
     def testNormalCaseServiceDeath(self):
-        Naming.set_ignore_local_ip(False)
+        Naming.set_ignore_local_ip(True)
         LOGGER.setLevel(test_log_level)
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         self.assertNotEqual(ns, None)
@@ -211,7 +210,6 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         s.stop()
-        s.wait_stop(timeout=0)
         del ns
 
     def testNormalCase(self):
@@ -231,8 +229,6 @@ class TestNamingService(unittest.TestCase):
         time.sleep(1)
         addproxy._proxy_stop_server()
         del addproxy
-        s.stop()
-        s.wait_stop(timeout=0)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
@@ -282,7 +278,6 @@ class TestNamingService(unittest.TestCase):
         del i
         serverto.stop()
         s.stop()
-        s.wait_stop(timeout=0)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
@@ -357,66 +352,45 @@ class TestNamingService(unittest.TestCase):
         del ns
     def testBasicStartStopStart(self):
         LOGGER.setLevel(test_log_level)
+        from pizco import Agent
+        Agent.set_default_ioloop("new")
         ns = Naming.start_naming_service(in_process=False)
         to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        print("registering service")
-        pxy = Proxy("tcp://127.0.0.1:500")
-        print(pxy)
-        ns.register_local_service("myremote", "tcp://*:500")
-        print(ns.get_services())
-        print("reading endpoint")
-        print(ns.get_endpoint("myremote"))
-        time.sleep(0.5)
-        print("stopping server")
-        assert("myremote" in ns.get_services())
-        s.stop()
-        s.wait_stop(timeout=0)
-        print("waiting")
-        time.sleep(4)
-        print("trying to read services")
-        print(ns.get_services())
-        assert(not "myremote" in ns.get_services())
-        time.sleep(2)
-        print("stopping naming server")
+        for i in range(0,5):
+            print("---#####TEST####---")
+            #s = Server(to,rep_endpoint="tcp://*:500")
+            s = Server.serve_in_thread(TestObject,(),{},rep_endpoint="tcp://*:500")
+            #s = Server.serve_in_process(TestObject,(),{},rep_endpoint="tcp://*:500")
+            print("registering service")
+            pxy = Proxy("tcp://127.0.0.1:500")
+            print(pxy)
+            ns.register_local_service("myremote", "tcp://*:500")
+            print(ns.get_services())
+            print("reading endpoint")
+            print(ns.get_endpoint("myremote"))
+            time.sleep(0.5)
+            print("stopping server")
+            self.assertTrue("myremote" in ns.get_services())
+            print("waiting")
+            #s.stop()
+            #s.wait_stop()
+            s._proxy_stop_server()
+            #s._proxy_wait_stop(timeout=0)
+            time.sleep(7)
+            print("trying to read services")
+            print(ns.get_services())
+            no_more_my_remote = not "myremote" in ns.get_services()
+            self.assertTrue(no_more_my_remote)
+            print("restarting loop")
         ns._proxy_stop_server()
-        ns._proxy_stop_me()
-        del ns
-
         assert(not PeerWatcher.check_beacon_port())
-        #port is availlable
 
-        print("reperforming the test")
-        ns = Naming.start_naming_service(in_process=False)
-        to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        print("registering service")
-        ns.register_local_service("myremote", "tcp://*:500")
-        print(ns.get_services())
-        print("reading endpoint")
-        print(ns.get_endpoint("myremote"))
-        time.sleep(0.5)
-        print("stopping server")
-        s.stop()
-        s.wait_stop(timeout=0)
-        assert("myremote" in ns.get_services())
-        print("waiting")
-        time.sleep(3)
-        print("trying to read services")
-        print(ns.get_services())
-        assert(not "myremote" in ns.get_services())
-
-        time.sleep(5)
-        ns._proxy_stop_server()
-        ns._proxy_stop_me()
-        del ns
-        print("done")
 
 if __name__ == "__main__":
     #import multiprocessing as mp
     #mp.log_to_stderr(logging.DEBUG)
     #mp.get_logger().setLevel(logging.DEBUG)
-    Naming.set_ignore_local_ip(False)
+    Naming.set_ignore_local_ip(True)
     Server.set_default_ioloop("new")
     Naming.set_service_watcher_method("socket")
 

@@ -186,11 +186,6 @@ class PeerWatcher(Thread):
 
 
     def on_peer_event(self, addrinfo):
-        evt = partial(self.delayed_peer_event,addrinfo=addrinfo)
-        self._events.put(evt)
-        
-    def delayed_peer_event(self, addrinfo):
-        LOGGER.debug(self.peers_list)
         if addrinfo in self.peers_list:
             if self.peers_list[addrinfo] < self.PEER_LIFES_AT_START:
                 self.peers_list[addrinfo] += 1
@@ -228,16 +223,18 @@ class SocketChecker(object):
         ip,port = self._endpoint_to_connection(endpoint)
         self.ip = ip
         self.port = port
-        if not self.check():
+        if not self.check(timeout=5.0):
             raise Exception("Service port not opened tcp://{}:{}".format(ip,port))
 
-    def check(self):
+    def check(self,timeout=0.5):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.connect_ex((self.ip,self.port))
-        if result == 0:
+        socket.setdefaulttimeout(timeout/2.)
+        time.sleep(timeout/2.)
+        try:
+            sock.connect((self.ip,self.port))
             sock.close()
             return True
-        else:
+        except:
             return False
 
     def _endpoint_to_connection(self,endpoint):
@@ -296,8 +293,9 @@ class ServicesWatcher(Thread):
                 self.do_job()
                 self.process_queue()
                 exec_time = time.time()-start_time
-            if self._exit_e.wait(self._periodicity):
-                break
+            else:
+                if self._exit_e.wait(self._periodicity):
+                    break
         self.end_watch()
         LOGGER.info("end main loop")
 
@@ -331,10 +329,6 @@ class ServicesWatcher(Thread):
 
 
     def register_local_proxy(self, servicename, endpoint):
-        evtcbck = partial(self.delayed_register_local_proxy,servicename=servicename,endpoint=endpoint)
-        self._events.put(evtcbck)
-        
-    def delayed_register_local_proxy(self, servicename, endpoint):
         LOGGER.debug("registering local proxy %s %s", servicename, endpoint)
         endpoint = endpoint.replace("*", "127.0.0.1")
         with self._sl_RLock:
@@ -539,6 +533,8 @@ class Naming(Thread):
         if not "127.0.0.1" in rep_endpoint:
             endpoint = endpoint.replace("127.0.0.1","*")
 
+        print rep_endpoint
+        print endpoint
         ns.register_local_service(service_name, endpoint, add_hostname_prefix=add_hostname_prefix)
 
         return pxy
@@ -658,6 +654,9 @@ class Naming(Thread):
                     import traceback
                     traceback.print_exc()
                     LOGGER.error("failure in connecting local proxy")
+        else:
+            LOGGER.info("ignoring {}".format(addrinfo))
+
 
     def _on_remote_services(self, addrinfo, type, rservices):
         with self._servicesRLock:

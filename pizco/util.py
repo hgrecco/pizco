@@ -157,6 +157,7 @@ class Signal(object):
 
                 if autodetect == True:
                     return
+
                 
                 for kw in self._kwargs:
                     if kw not in kwargs:

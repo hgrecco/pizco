@@ -19,7 +19,7 @@ def configure_test(level, process):
     test_log_level = level
     perform_test_in_process = process
 
-configure_test(logging.INFO,False)
+configure_test(logging.DEBUG,False)
 
 
 class TestObject(object):
@@ -67,6 +67,7 @@ class AggressiveTestServerObject(Thread):
             if self._job_e.isSet():
                 start_time = time.time()
                 self.heartbeat += 1
+                #print("heartbeat {}".format(self.heartbeat))
                 self.process_queue()
                 exec_time = time.time() - start_time
             if self._exit_e.wait(self._periodicity - exec_time):
@@ -75,7 +76,7 @@ class AggressiveTestServerObject(Thread):
     def process_queue(self):
         if self.is_alive():
             try:
-                event = self._events.get(timeout=1)
+                event = self._events.get(timeout=0.1)
             except Empty:
                 pass
             else:
@@ -172,6 +173,7 @@ class TestNamingService(unittest.TestCase):
         LOGGER.info(sw._local_services)
         time.sleep(2)
         s.stop()
+        s.wait_stop(timeout=None)
         del s
         time.sleep(2)
         LOGGER.info(sw._local_services)
@@ -210,6 +212,7 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         s.stop()
+        s.wait_stop(timeout=None)
         del ns
 
     def testNormalCase(self):
@@ -231,16 +234,20 @@ class TestNamingService(unittest.TestCase):
         del addproxy
         ns._proxy_stop_server()
         ns._proxy_stop_me()
+
         del ns
 
 
     def testARemoteCase(self):
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
         LOGGER.setLevel(test_log_level)
         ##optionnally start in separate thread
         endpoint = "tcp://127.0.0.1:8000"
-        endpoint1 = "tcp://127.0.0.1:8000"
+        endpoint1 = "tcp://127.0.0.1:8001"
         serverto = AggressiveTestServerObject()
         s = Server(serverto,rep_endpoint=endpoint)
+        #s = Server.serve_in_thread(AggressiveTestServerObject,(),{},rep_endpoint=endpoint)
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         ns.register_local_service("aggressive", endpoint)
         time.sleep(2)
@@ -255,10 +262,14 @@ class TestNamingService(unittest.TestCase):
         i.sig_aggressive.connect(to.slot_aggressive)
         time.sleep(1)
         serverto.start()
-        time.sleep(1)
+        serverto.unpause()
+        print i.heartbeat
+        time.sleep(5)
+        print i.heartbeat
         i.pause()
         LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_before = i.heartbeat
+        dir(i.heartbeat)
         time.sleep(1)
         LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_after_pause = i.heartbeat
@@ -278,6 +289,7 @@ class TestNamingService(unittest.TestCase):
         del i
         serverto.stop()
         s.stop()
+        s.wait_stop(timeout=None)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns

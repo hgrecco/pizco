@@ -57,7 +57,8 @@ class PeerWatcher(Thread):
         self._job_e.set()
         self._events = Queue(30)
 
-        self._periodicity = 0.2
+        self._periodicity = 1
+        self._queue_delay = 0.1
         self._heartbeat = 0
         self.peers_list = {}
         self.sig_peer_event.connect(self.on_peer_event)
@@ -82,7 +83,7 @@ class PeerWatcher(Thread):
     def process_queue(self):
         if self.is_alive():
             try:
-                event = self._events.get(timeout=0.1)
+                event = self._events.get(timeout=self._queue_delay)
             except Empty:
                 pass
             else:
@@ -275,6 +276,7 @@ class ServicesWatcher(Thread):
         self._job_e.set()
         self._events = Queue(30)
         self._periodicity = 1
+        self._queue_delay = 0.1
         self._heartbeat = 0
         #
         self._local_services = {}
@@ -293,9 +295,8 @@ class ServicesWatcher(Thread):
                 self.do_job()
                 self.process_queue()
                 exec_time = time.time()-start_time
-            else:
-                if self._exit_e.wait(self._periodicity):
-                    break
+            if self._exit_e.wait(self._periodicity):
+                break
         self.end_watch()
         LOGGER.info("end main loop")
 
@@ -313,7 +314,7 @@ class ServicesWatcher(Thread):
     def process_queue(self):
         if self.is_alive():
             try:
-                event = self._events.get(timeout=0.1)
+                event = self._events.get(timeout=self._queue_delay)
             except Empty:
                 pass
             else:
@@ -390,7 +391,8 @@ class Naming(Thread):
         self._job_e.set()
         self._events = Queue(30)
 
-        self._periodicity = 100
+        self._periodicity = 1
+        self._queue_delay = 0.1
         self.peer_proxies = {}
         self.peer_slots = {}
         self.peers_services = {}
@@ -454,7 +456,7 @@ class Naming(Thread):
     def process_queue(self):
         if self.is_alive():
             try:
-                event = self._events.get(timeout=0.1)
+                event = self._events.get(timeout=self._queue_delay)
             except Empty:
                 pass
             else:

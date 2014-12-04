@@ -25,6 +25,7 @@ from .util import Signal
 from .agent import Agent, default_io_loop
 from .compat import futures
 
+import logging
 #logger = mp.log_to_stderr()
 #logger.setLevel(mp.SUBDEBUG)
 
@@ -114,7 +115,7 @@ class Server(Agent):
     def __init__(self, served_object, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
                  ctx=None, loop=None):
         try:
-            LOGGER.debug("test server")
+            LOGGER.debug("Server start")
             if rep_endpoint.find("*") != -1:
                 pub_endpoint = pub_endpoint.replace("127.0.0.1", "*")
             self.served_object = served_object
@@ -217,7 +218,8 @@ class Server(Agent):
     #    self.publish(topic, (value, old_value, other))
 
     def emit(self, topic, *args, **kwargs):
-        LOGGER.debug('Emitting %s, %s, %s', topic, args, kwargs)
+        if LOGGER.isEnabledFor(logging.DEBUG):
+            LOGGER.debug('Emitting %s, %s, %s', topic, args, kwargs)
         self.publish(topic, (args, kwargs))
 
     def on_subscribe(self, topic, count):
@@ -620,9 +622,9 @@ class Proxy(object):
     def _proxy_wait_stop(self,timeout=5):
         return self._proxy_agent.wait_stop(timeout)
 
-    def _proxy_stop_server(self):
+    def _proxy_stop_server(self, timeout=5):
         self._proxy_agent.request(self._proxy_agent.remote_rep_endpoint, 'stop')
-        self._proxy_agent.wait_server_stop()
+        self._proxy_agent.wait_server_stop(timeout=5)
         while check_port_opened(*endpoint_to_connection(self._proxy_agent.remote_rep_endpoint)):
             import time
             time.sleep(0.5)

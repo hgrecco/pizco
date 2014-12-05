@@ -792,13 +792,10 @@ class AgentTest(unittest.TestCase):
         import pickle
         s = Server(Example())
         x = pickle.dumps(s)
-        print x
         px = pickle.loads(x)
-        print type(px)
         fut = px.fut()
         self.assertEqual(fut.result(), 10)
         xp = pickle.dumps(px)
-        print xp
         pp = pickle.loads(xp)
         fut2 = pp.fut()
         self.assertEqual(fut2.result(), 10)

@@ -788,6 +788,25 @@ class AgentTest(unittest.TestCase):
         serverto.stop()
         server.stop()
         time.sleep(5)
+    def test_proxy_and_server_pickling(self):
+        import pickle
+        s = Server(Example())
+        x = pickle.dumps(s)
+        print x
+        px = pickle.loads(x)
+        print type(px)
+        fut = px.fut()
+        self.assertEqual(fut.result(), 10)
+        xp = pickle.dumps(px)
+        print xp
+        pp = pickle.loads(xp)
+        fut2 = pp.fut()
+        self.assertEqual(fut2.result(), 10)
+        pp._proxy_stop_me()
+        px._proxy_stop_me()
+        s.stop()
+        s.wait_stop()
+
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(AgentTest)

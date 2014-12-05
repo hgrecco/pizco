@@ -366,6 +366,14 @@ class Server(Agent):
                        if not name.startswith('_') and self.is_signal(value)])
         return remotes, objects, signals
 
+    def __getstate__(self):
+        return {"remote_rep_endpoint":self.rep_endpoint}
+
+    def __setstate__(self, state):
+        print("seting state")
+        self.__class__ = Proxy
+        self = Proxy.__init__(self,state["remote_rep_endpoint"])
+        print("calling creation")
 
 class SignalDict(defaultdict):
     #FIXME : Signal default dict. Signal Class Can Be Replaced to Another Type
@@ -521,11 +529,14 @@ class ProxyAgent(Agent):
         return self._remote_stopping.wait(timeout)
                         
     def on_future_completed(self, sender, topic, content, msgid):
-        fut = self._futures[content['msgid']]
-        if content['exception']:
-            fut.set_exception(content['exception'])
-        else:
-            fut.set_result(content['result'])
+        try:
+            fut = self._futures[content['msgid']]
+            if content['exception']:
+                fut.set_exception(content['exception'])
+            else:
+                fut.set_result(content['result'])
+        except KeyError:
+            LOGGER.debug("received unregistered future event {} / {}".format(content["msgid"],self._futures.keys))
 
     def on_notification(self, sender, topic, content, msgid):
         try:
@@ -644,3 +655,9 @@ class Proxy(object):
         if hasattr(super(Proxy, self), "_proxy_agent"):
             self._proxy_agent.stop()
             self._proxy_wait_stop()
+
+    def __getstate__(self):
+        return {"remote_rep_endpoint":self._proxy_agent.remote_rep_endpoint}
+
+    def __setstate__(self, state):
+        Proxy.__init__(self,state["remote_rep_endpoint"])

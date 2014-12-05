@@ -98,11 +98,9 @@ class PeerWatcher(Thread):
             self._life_job()
 
     def stop(self):
-        LOGGER.debug("stopping peer watcher")
         self._job_e.clear()
         self._exit_e.set()
         self.join()  # self._periodicity*3
-        LOGGER.debug("done stopping peers watcher")
 
     def _init_beacon(self):
         # Create UDP socket
@@ -321,12 +319,10 @@ class ServicesWatcher(Thread):
                 event()
                 
     def stop(self):
-        LOGGER.debug("stopping service watcher")
         self.sig_service_death.disconnect()
         self._job_e.clear()
         self._exit_e.set()
         self.join() # wont work if peer periodicity is self._periodicity*5
-        LOGGER.debug("done stopping service watcher")
 
 
     def register_local_proxy(self, servicename, endpoint):
@@ -481,11 +477,9 @@ class Naming(Thread):
         self._swatcher.stop()
         self._pwatcher.stop()
 
-        LOGGER.debug("Stopping naming service")
         self._job_e.clear()
         self._exit_e.set()
         self.join()
-        LOGGER.debug("Stopped naming service")
 
     def clear_peer_proxies(self):
         for pxy in self.peer_proxies.values():

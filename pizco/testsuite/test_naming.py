@@ -263,9 +263,7 @@ class TestNamingService(unittest.TestCase):
         time.sleep(1)
         serverto.start()
         serverto.unpause()
-        print i.heartbeat
         time.sleep(5)
-        print i.heartbeat
         i.pause()
         LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_before = i.heartbeat

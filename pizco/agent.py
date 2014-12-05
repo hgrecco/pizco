@@ -125,6 +125,8 @@ class Agent(object):
         self._running_lock = threading.Lock()
         self._running = threading.Event()
         self._ending = threading.Event()
+        self._running.clear()
+        self._ending.clear()
 
         #one loop per process
         self.ctx = ctx or zmq.Context.instance()
@@ -173,6 +175,8 @@ class Agent(object):
         #check the running thread assert is not the same as the loop
         if not AgentManager.is_loop_in_current_thread(self.loop):
             self._running.wait()
+            LOGGER.info("Agent started")
+
     @staticmethod
     def set_default_ioloop(mode="new"):
         global default_io_loop

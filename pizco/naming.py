@@ -223,7 +223,7 @@ class SocketChecker(object):
         self.ip = ip
         self.port = port
         if not self.check(timeout=5.0):
-            raise Exception("Service port not opened tcp://{}:{}".format(ip,port))
+            raise Exception("Service port not opened tcp://{0}:{1}".format(ip,port))
 
     def check(self,timeout=0.5):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

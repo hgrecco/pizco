@@ -793,7 +793,7 @@ class AgentTest(unittest.TestCase):
         s = Server(Example())
         x = pickle.dumps(s)
         px = pickle.loads(x)
-        print type(px)
+        print(type(px))
         fut = px.fut()
         self.assertEqual(fut.result(), 10)
         xp = pickle.dumps(px)

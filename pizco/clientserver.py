@@ -536,7 +536,7 @@ class ProxyAgent(Agent):
             else:
                 fut.set_result(content['result'])
         except KeyError:
-            LOGGER.debug("received unregistered future event {} / {}".format(content["msgid"],self._futures.keys))
+            LOGGER.debug("received unregistered future event {0} / {1}".format(content["msgid"],self._futures.keys))
 
     def on_notification(self, sender, topic, content, msgid):
         try:

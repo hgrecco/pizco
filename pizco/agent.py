@@ -52,7 +52,7 @@ class AgentManager(object):
 
     @classmethod
     def remove(cls, agent):
-        LOGGER.debug("removing agent {}".format(type(agent),agent.rep_endpoint))
+        LOGGER.debug("removing agent {0} {1}".format(type(agent),agent.rep_endpoint))
 
         loop = agent.loop
         if agent in cls.agents[loop]:
@@ -69,10 +69,10 @@ class AgentManager(object):
             cls.in_use.remove(loop)
             loop.add_callback(loop.close)
             if not cls.is_loop_in_current_thread(loop):
-                LOGGER.debug("trying to join {} of {}".format(type(agent),agent.rep_endpoint))
+                LOGGER.debug("trying to join {0} of {1}".format(type(agent),agent.rep_endpoint))
                 cls.join(loop)
             else:
-                LOGGER.debug("warning join {} of {} in same thread/loop".format(type(agent),agent.rep_endpoint))
+                LOGGER.debug("warning join {0} of {1} in same thread/loop".format(type(agent),agent.rep_endpoint))
 
 
     @classmethod
@@ -89,10 +89,10 @@ class AgentManager(object):
         try:
             ret = None   
             while cls.threads[loop].isAlive():
-                LOGGER.debug("trying to join {} of {}".format(type(agent),agent.rep_endpoint))
+                LOGGER.debug("trying to join {0} of {1}".format(type(agent),agent.rep_endpoint))
                 ret = cls.threads[agent.loop].join(10)
                 if ret == None:
-                    LOGGER.warning("timeout on thread join {} of {}".format(type(agent),agent.rep_endpoint))
+                    LOGGER.warning("timeout on thread join {0} of {1}".format(type(agent),agent.rep_endpoint))
                     break
                 else:
                     LOGGER.info("ended up with ret=%s", ret)

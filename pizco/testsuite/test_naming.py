@@ -19,8 +19,7 @@ def configure_test(level, process):
     test_log_level = level
     perform_test_in_process = process
 
-
-configure_test(logging.INFO,False)
+configure_test(logging.DEBUG,False)
 
 
 class TestObject(object):
@@ -68,6 +67,7 @@ class AggressiveTestServerObject(Thread):
             if self._job_e.isSet():
                 start_time = time.time()
                 self.heartbeat += 1
+                #print("heartbeat {}".format(self.heartbeat))
                 self.process_queue()
                 exec_time = time.time() - start_time
             if self._exit_e.wait(self._periodicity - exec_time):
@@ -76,7 +76,7 @@ class AggressiveTestServerObject(Thread):
     def process_queue(self):
         if self.is_alive():
             try:
-                event = self._events.get(timeout=1)
+                event = self._events.get(timeout=0.1)
             except Empty:
                 pass
             else:
@@ -132,7 +132,9 @@ class RandomTestData(object):
 class TestNamingService(unittest.TestCase):
     def testPeerWatcher(self):
         LOGGER.setLevel(test_log_level)
+
         while PeerWatcher.check_beacon_port():
+            print("Suspecting naming service to be running")
             LOGGER.info("trying to stop naming service")
             ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()
@@ -146,12 +148,12 @@ class TestNamingService(unittest.TestCase):
         print(pw.peers_list)
         pw.stop()
         del pw
-        time.sleep(1)
 
     def testServiceWatcher(self):
         LOGGER.setLevel(test_log_level)
         while PeerWatcher.check_beacon_port():
-            print(LOGGER.info("trying to stop naming service"))
+            print ("checking beacon port saying it's not free")
+            LOGGER.info("trying to stop naming service")
             ns = Naming.start_naming_service(in_process=perform_test_in_process)
             ns._proxy_stop_server()
             del ns
@@ -163,15 +165,18 @@ class TestNamingService(unittest.TestCase):
         ns.sig_register_local_service.connect(sw.register_local_proxy)
         ns.sig_unregister_local_service.connect(sw.unregister_local_proxy)
         sw.start()
+
         to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        ns.sig_register_local_service.emit("myremote","tcp://*:500")
-        LOGGER.info(sw._local_proxies)
+        s = Server(to,rep_endpoint="tcp://*:6500")
+        ns.sig_register_local_service.emit("myremote","tcp://*:6500")
+
+        LOGGER.info(sw._local_services)
         time.sleep(2)
         s.stop()
+        s.wait_stop(timeout=None)
         del s
         time.sleep(2)
-        LOGGER.info(sw._local_proxies)
+        LOGGER.info(sw._local_services)
         sw.stop()
         del sw
         time.sleep(2)
@@ -179,23 +184,26 @@ class TestNamingService(unittest.TestCase):
         del ns
 
     def testNormalCaseServiceDeath(self):
+        Naming.set_ignore_local_ip(True)
         LOGGER.setLevel(test_log_level)
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         self.assertNotEqual(ns, None)
         time.sleep(1)
         #local_pxy = Proxy("tcp://127.0.0.1:5777",300)
         to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        time.sleep(1)
-        ns.register_local_service("myremote", "tcp://*:500")
-        ns.test_peer_death()
+        s = Server(to,rep_endpoint="tcp://*:6500")
+        ns.register_local_service("myremote", "tcp://*:6500")
+        time.sleep(0.5)
+        x = ns.get_endpoint("myremote")
+        ns.test__peer_death()
         self.assertEqual(ns.get_services(),
-                         {'myremote': 'tcp://127.0.0.1:500',
+                         {'myremote': 'tcp://127.0.0.1:6500',
                           'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+0.5)*PeerWatcher.PEER_LIFES_AT_START)
-        ns.test_peer_death_end()
         LOGGER.info("simulation of server object crash")
-        addproxy = Proxy(ns.get_endpoint("myremote"))
+        ns.test__peer_death_end()
+        x = ns.get_endpoint("myremote")
+        addproxy = Proxy(x,creation_timeout=3000)
         addproxy._proxy_stop_server()
         del addproxy
         time.sleep(PeerWatcher.PING_INTERVAL*(PeerWatcher.LIFE_INTERVAL+5)) #ping standard time
@@ -203,39 +211,43 @@ class TestNamingService(unittest.TestCase):
         time.sleep(1)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
+        s.stop()
+        s.wait_stop(timeout=None)
         del ns
-        time.sleep(5)
 
     def testNormalCase(self):
         LOGGER.setLevel(test_log_level)
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         self.assertNotEqual(ns, None)
         to = TestObject()
-        s = Server(to,rep_endpoint="tcp://*:500")
-        ns.register_local_service("myremote","tcp://*:500")
+        s = Server(to,rep_endpoint="tcp://*:6500")
+        ns.register_local_service("myremote","tcp://*:6500")
         addproxy = Proxy(ns.get_endpoint("myremote"))
         self.assertEqual(addproxy.times(50),50)
         time.sleep(1)
         LOGGER.info(ns.get_services())
         self.assertEqual(ns.get_services(),
-                         {'myremote': 'tcp://127.0.0.1:500',
+                         {'myremote': 'tcp://127.0.0.1:6500',
                           'pizconaming': 'tcp://127.0.0.1:5777'})
         time.sleep(1)
         addproxy._proxy_stop_server()
         del addproxy
         ns._proxy_stop_server()
         ns._proxy_stop_me()
+
         del ns
-        time.sleep(2)
 
 
     def testARemoteCase(self):
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
         LOGGER.setLevel(test_log_level)
         ##optionnally start in separate thread
         endpoint = "tcp://127.0.0.1:8000"
-        endpoint1 = "tcp://127.0.0.1:8000"
+        endpoint1 = "tcp://127.0.0.1:8001"
         serverto = AggressiveTestServerObject()
         s = Server(serverto,rep_endpoint=endpoint)
+        #s = Server.serve_in_thread(AggressiveTestServerObject,(),{},rep_endpoint=endpoint)
         ns = Naming.start_naming_service(in_process=perform_test_in_process)
         ns.register_local_service("aggressive", endpoint)
         time.sleep(2)
@@ -250,10 +262,12 @@ class TestNamingService(unittest.TestCase):
         i.sig_aggressive.connect(to.slot_aggressive)
         time.sleep(1)
         serverto.start()
-        time.sleep(1)
+        serverto.unpause()
+        time.sleep(5)
         i.pause()
         LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_before = i.heartbeat
+        dir(i.heartbeat)
         time.sleep(1)
         LOGGER.info('heartbeat = %s', i.heartbeat)
         beat_after_pause = i.heartbeat
@@ -273,10 +287,10 @@ class TestNamingService(unittest.TestCase):
         del i
         serverto.stop()
         s.stop()
+        s.wait_stop(timeout=None)
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
-        time.sleep(2)
 
     def testARemoteCaseMulti(self):
         #endpoint = "ipc://robbie-the-robot" not supported in windows
@@ -346,13 +360,85 @@ class TestNamingService(unittest.TestCase):
         ns._proxy_stop_server()
         ns._proxy_stop_me()
         del ns
-        time.sleep(1)
+    def testBasicStartStopStart(self):
+        LOGGER.setLevel(test_log_level)
+        from pizco import Agent
+        Agent.set_default_ioloop("new")
+        ns = Naming.start_naming_service(in_process=False)
+        to = TestObject()
+        for i in range(0,5):
+            print("---#####TEST####---")
+            #s = Server(to,rep_endpoint="tcp://*:6500")
+            s = Server.serve_in_thread(TestObject,(),{},rep_endpoint="tcp://*:6500")
+            #s = Server.serve_in_process(TestObject,(),{},rep_endpoint="tcp://*:6500")
+            print("registering service")
+            pxy = Proxy("tcp://127.0.0.1:6500")
+            print(pxy)
+            ns.register_local_service("myremote", "tcp://*:6500")
+            print(ns.get_services())
+            print("reading endpoint")
+            print(ns.get_endpoint("myremote"))
+            time.sleep(0.5)
+            print("stopping server")
+            self.assertTrue("myremote" in ns.get_services())
+            print("waiting")
+            #s.stop()
+            #s.wait_stop()
+            s._proxy_stop_server()
+            #s._proxy_wait_stop(timeout=0)
+            time.sleep(7)
+            print("trying to read services")
+            print(ns.get_services())
+            no_more_my_remote = not "myremote" in ns.get_services()
+            self.assertTrue(no_more_my_remote)
+            print("restarting loop")
+        ns._proxy_stop_server()
+        assert(not PeerWatcher.check_beacon_port())
 
 
 if __name__ == "__main__":
-    unittest.main()
-    freeze_support()
-    LOGGER.setLevel(logging.DEBUG)
-    ns = Naming.start_naming_service()
-    import time
-    time.sleep(5)
+    #import multiprocessing as mp
+    #mp.log_to_stderr(logging.DEBUG)
+    #mp.get_logger().setLevel(logging.DEBUG)
+    Naming.set_ignore_local_ip(True)
+    Server.set_default_ioloop("new")
+    Naming.set_service_watcher_method("socket")
+
+    print("config 1., separate loop's threads")
+    configure_test(logging.WARNING,False)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+    print("config 1b., running in process")
+    configure_test(logging.WARNING,True)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+    
+    Server.set_default_ioloop("instance")
+    print("config 2, single loop instance threads")
+    
+    print("config 2b., running in process")
+    configure_test(logging.WARNING,False)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+
+    print("config 2b., running in process")
+    configure_test(logging.WARNING,True)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+
+    print("config 3. Pizco type watchdog")
+    
+    Naming.set_ignore_local_ip(False)
+    Naming.set_service_watcher_method("pizco")
+    Server.set_default_ioloop("new")
+    
+    print("config 3., service watcher : PIZCO PROXY")
+    configure_test(logging.WARNING,False)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+    
+    print("config 3b., service watcher : PIZCO PROXY in PROCESS")
+    configure_test(logging.WARNING,True)
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestNamingService)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+

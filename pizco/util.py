@@ -11,7 +11,7 @@
 
 import inspect
 import traceback
-
+import types
 
 class SignalError(Exception):
     pass
@@ -24,6 +24,41 @@ def specable(f):
     except:
         return False
 
+def spec_builtin(obj):
+   """ Describe a builtin function """
+   # Built-in functions cannot be inspected by
+   # inspect.getargspec. We have to try and parse
+   # the __doc__ attribute of the function.
+
+   docstr = obj.__doc__
+   args = ''
+
+   if not docstr:
+      if isinstance(obj,types.BuiltinFunctionType):
+          docstr = obj.__name__+"(*args, **kwargs)"
+      if isinstance(obj,types.BuiltinMethodType):
+          docstr = obj.__name__+"(self, *args, **kwargs)"
+    
+   items = docstr.split('\n')
+   if items:
+      func_descr = items[0]
+      s = func_descr.replace(obj.__name__,'')
+      idx1 = s.find('(')
+      idx2 = s.find(')',idx1)
+      if idx1 != -1 and idx2 != -1 and (idx2>idx1+1):
+         args = s[idx1+1:idx2]
+         _varargs = False
+         if "*args" in args:
+             _varargs = True
+         _kwvarargs = False
+         if "**kwargs" in args:
+             _kwvarargs = True
+         return inspect.ArgSpec(
+             args.split(" "), _varargs, _kwvarargs, [])
+   
+   if args=='':
+        return inspect.ArgSpec(
+                [], None, None, [])
 
 def getspec(f):
     if specable(f):
@@ -38,11 +73,19 @@ def getspec(f):
         return inspect.ArgSpec(
             args, spec.varargs is not None,
             spec.keywords is not None, defaults)
+
     if hasattr(f, '__call__') and specable(f.__call__):
         spec = getspec(f.__call__)
         args = spec.args[1:]  # remove reference to self
         return inspect.ArgSpec(
             args, spec.varargs, spec.keywords, spec.defaults)
+
+    if isinstance(f,types.BuiltinFunctionType):
+        return spec_builtin(f)
+
+    if isinstance(f,types.BuiltinMethodType):
+        return spec_builtin(f)
+
     # TODO handle partials
     raise ValueError(
         "getspec doesn't know how to get function spec from type {0}".format(
@@ -69,22 +112,31 @@ class Signal(object):
     def Auto():
         return Signal(nargs=-1)
 
-    def _auto_match(self, nargs):
+    def _auto_match(self, nargs, kwargs = []):
         #autoconnect on first connection
         self._nargs = nargs
-        
+        self._kwargs = kwargs
+
     def _verify_slot(self, slot):
         # signal varags -> slot varargs
         # signal args -> slot args (or varargs)
         # signal kwargs -> slot kwargs
+        
+        if self._nargs == -1:
+            autodetect = True
+        else:
+            autodetect = False
+
+            
         spec = getspec(slot)
         if not spec.varargs:  # function expects args
             if self._varargs:
                 raise SignalError(
                     "Slot {0} does not accept varargs".format(slot))
             else:  # check nargs
-                if self._nargs == -1:
-                    self._auto_match(len(spec.args))
+                if autodetect == True:
+                    return
+                    
                 maxargs = len(spec.args)
                 if maxargs < self._nargs:
                     raise SignalError(
@@ -102,12 +154,18 @@ class Signal(object):
                     "Slot {0} does not accept varkwargs".format(slot))
             else:  # signal only passes specific kwargs
                 kwargs = spec.args[::-1][:len(spec.defaults)]
+
+                if autodetect == True:
+                    return
+
+                
                 for kw in self._kwargs:
                     if kw not in kwargs:
                         raise SignalError(
                             "Slot {0} does not accept keyword {1}".format(
                                 slot, kw))
 
+                
     def connect(self, slot):
         # add dummy connection type maybe this the place to create the
         # pyqtSignals to be able to resync with qt event loop
@@ -123,14 +181,15 @@ class Signal(object):
             self.slots.remove(slot)
 
     def _verify_emit(self, args, kwargs):
+
+        if self._nargs == -1:
+            self._auto_match(len(args),kwargs.keys())
+
         if not self._varargs:  # check args
-            if self._nargs == -1:
-                self._auto_match(len(args))
-                
-            if len(args) != self._nargs:
+            if (len(args)) != self._nargs:
                 raise SignalError(
-                    "emit called with invalid number of args {0}".format(
-                        len(args)))
+                    "emit called with invalid number of args {0} / {1}".format(
+                        len(args), self._nargs))
                      
         if not self._varkwargs:  # check kwargs
             for k in kwargs:

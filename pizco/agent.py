@@ -23,49 +23,80 @@ from . import LOGGER
 from .protocol import Protocol
 from .util import bind
 
+global default_io_loop
+default_io_loop = ioloop.ZMQIOLoop.instance
 
 class AgentManager(object):
 
-    agents = weakref.WeakKeyDictionary()
+    agents = weakref.WeakKeyDictionary() #agents in loop will be deleted when there will no more be reference to the loop
+
     threads = weakref.WeakKeyDictionary()
+
     in_use = compat.WeakSet()
 
     @classmethod
     def add(cls, agent):
         loop = agent.loop
         try:
-            cls.agents[loop].append(agent)
+            cls.agents[loop].add(agent)
         except KeyError:
+            LOGGER.debug("starting the loop {}".format(id(loop)))
             t = threading.Thread(target=loop.start, name='ioloop-{0}'.format(id(loop)))
-            cls.agents[loop] = [agent, ]
+            cls.agents[loop] = set([agent, ])
             cls.threads[loop] = t
             cls.in_use.add(loop)
             t.daemon = True
             t.start()
+            LOGGER.debug("loop started {}".format(id(loop)))
+
 
     @classmethod
     def remove(cls, agent):
+        LOGGER.debug("removing agent {0} {1}".format(type(agent),agent.rep_endpoint))
+
         loop = agent.loop
-        cls.agents[loop].remove(agent)
-        if not cls.agents[loop] and loop in cls.in_use:
+        if agent in cls.agents[loop]:
+            cls.agents[loop].remove(agent)
+            delattr(agent,"loop")
+        else:
+            LOGGER.warning("removing an allready removed agent")
+            return
+        #no more loop and no more loop in cls.in_use... kind of strange
+        #only remove create the removal of the element (_proxy_stop_me, _proxy_stop_server)
+
+        if (cls.agents[loop]) and (not loop in cls.in_use) and (loop != ioloop.IOLoop.instance()):
+            LOGGER.debug("removing the loop {}".format(id(loop)))
             cls.in_use.remove(loop)
-            loop.add_callback(lambda: loop.close)
-            cls.join(agent)
+            loop.add_callback(loop.close)
+            if not cls.is_loop_in_current_thread(loop):
+                LOGGER.debug("trying to join {0} of {1}".format(type(agent),agent.rep_endpoint))
+                cls.join(loop)
+            else:
+                LOGGER.debug("warning join {0} of {1} in same thread/loop".format(type(agent),agent.rep_endpoint))
 
 
     @classmethod
-    def join(cls, agent):
+    def is_loop_in_current_thread(cls, loop):
+        if threading.current_thread().ident == cls.threads[loop].ident:
+            LOGGER.warning("WARNING LOOP IN CURRENT THREAD")
+            return True
+        else:
+            return False
+
+
+    @classmethod
+    def join(cls, loop, agent):
         try:
-            ret = None
-            while cls.threads[agent.loop].isAlive():
-                LOGGER.debug("trying to join")
-                ret = cls.threads[agent.loop].join(1)
+            ret = None   
+            while cls.threads[loop].isAlive():
+                LOGGER.debug("trying to join {0} of {1}".format(type(agent),agent.rep_endpoint))
+                ret = cls.threads[agent.loop].join(10)
                 if ret == None:
-                    pass
-                    #LOGGER.error("timeout")
+                    LOGGER.warning("timeout on thread join {0} of {1}".format(type(agent),agent.rep_endpoint))
+                    break
                 else:
                     LOGGER.info("ended up with ret=%s", ret)
-            LOGGER.debug("stopping thread %s", ret)
+            LOGGER.debug("stopped {}".format(agent.rep_endpoint))
         except (KeyboardInterrupt, SystemExit):
             return
 
@@ -89,13 +120,21 @@ class Agent(object):
     """
 
     def __init__(self, rep_endpoint='tcp://127.0.0.1:0', pub_endpoint='tcp://127.0.0.1:0',
-                 ctx=None, loop=None, protocol=None):
-        
-        self._running = False
+                 ctx=None, loop=default_io_loop, protocol=None):
+
+        self._running_lock = threading.Lock()
+        self._running = threading.Event()
+        self._ending = threading.Event()
+        self._running.clear()
+        self._ending.clear()
+
+        #one loop per process
         self.ctx = ctx or zmq.Context.instance()
-        self.loop = loop or ioloop.IOLoop.instance()
+        self.loop = default_io_loop()
+
         self.protocol = protocol or Protocol(os.environ.get('PZC_KEY', ''),
                                              os.environ.get('PZC_SER', 'pickle'))
+
         LOGGER.debug('New agent at %s with context %s and loop %s',
                      rep_endpoint, self.ctx, self.loop)
 
@@ -132,50 +171,102 @@ class Agent(object):
         #Transforms sockets into Streams in the loop, add callbacks and start loop if necessary.
         self._start(rep, pub, sub)
 
+        #usually the Instanciaton of the Proxy is not in the same IOloop as the "parent creator"
+        #check the running thread assert is not the same as the loop
+        if not AgentManager.is_loop_in_current_thread(self.loop):
+            self._running.wait()
+            LOGGER.info("Agent started")
+
+    @staticmethod
+    def set_default_ioloop(mode="new"):
+        global default_io_loop
+        if mode == "new":
+            default_io_loop = ioloop.ZMQIOLoop
+        elif mode == "instance":
+            default_io_loop = ioloop.ZMQIOLoop.instance
+        else:
+            assert(mode in ["new","instance"])
+
     def _start(self, rep, pub, sub, in_callback=False):
-        AgentManager.add(self)
         if not in_callback:
+            AgentManager.add(self)
             self.loop.add_callback(lambda: self._start(rep, pub, sub, True))
         else:
+            AgentManager.add(self)
             self.rep = zmqstream.ZMQStream(rep, self.loop)
             self.pub = zmqstream.ZMQStream(pub, self.loop)
             self.sub = zmqstream.ZMQStream(sub, self.loop)
             self.rep.on_recv_stream(self._on_request)
             self.pub.on_recv_stream(self._on_incoming_xpub)
             self.sub.on_recv_stream(self._on_notification)
-
-            self._running = True
-
+            self._running.set()
             LOGGER.info('Started agent %s', self.rep_endpoint)
+
+    def close_stream(self,stream):
+        if stream.closed():
+            LOGGER.error("closing an allready closed stream")
+            return
+        else:
+            LOGGER.debug("close stream {}".format(str(stream)))
+        stream.on_recv(None)
+        stream.flush()
+        stream.close()
+
+
+    def close_connections(self):
+        for sock in self.connections.values():
+            sock.close()
+        self.connections = {}
 
     def stop(self):
         """Stop actor unsubscribing from all notification and closing the streams.
         """
-        LOGGER.debug("starting stopping")
-        if not getattr(self, '_running', False):
-            return
+        LOGGER.debug("starting stopping from loop")
+        with self._running_lock:
+            if not self._running.isSet():
+                LOGGER.warning("calling stop on a stopping object")
+                return
+            else:
+                self._running.clear()
 
         LOGGER.debug("stopping actor")
-        #self.publish('__status__', 'stop')
-        #for (endpoint, topic) in list(self.notifications_callbacks.keys()):
-        #    self.unsubscribe(endpoint, topic)
+        #send __status__ signal to "proxy or connected servers
+        #unsubscribe will hang
+        #find a way to unsubscribe asynchronously
 
         if hasattr(self,'did_instantiate'):
             self.loop.add_callback(self.clean_instance)
-        
-        for stream in (self.rep, self.pub, self.sub):
-            self.loop.add_callback(lambda: stream.on_recv(None))
-            self.loop.add_callback(stream.flush)
-            self.loop.add_callback(stream.close)
-        for sock in self.connections.values():
-            self.loop.add_callback(sock.close)
+
+        self.loop.add_callback(self.close_connections)
+
+        self.loop.add_callback(lambda: self.close_stream(self.rep))
+        self.publish('__status__', 'stop')
+        for (endpoint, topic) in list(self.notifications_callbacks.keys()):
+            self.unsubscribe(endpoint, topic)
+
+        self.loop.add_callback(lambda: self.close_stream(self.pub))
+
+        self.loop.add_callback(lambda: self.close_stream(self.sub))
 
         self.loop.add_callback(lambda: LOGGER.info("loop empty"))
-        self.connections = {}
+        self.loop.add_callback(self._ending.set)
+
         AgentManager.remove(self)
-        self._running = False
-        LOGGER.info('Stopped agent %s in loop', self.rep_endpoint)
         
+        #LOGGER.info('Stopped agent %s in loop %s', self.rep_endpoint, self.loop)
+
+    def wait_stop(self, timeout=None):
+        self._ending.wait(timeout)
+
+    def stopped(self):
+        return self._ending.isSet()
+
+    def wait_start(self, timeout=None):
+        self._running.wait(timeout)
+
+    def started(self):
+        return self._running.isSet()
+
     def clean_instance(self):
         LOGGER.info('cleaning served object')
         if hasattr(self.served_object,"stop"):
@@ -183,7 +274,8 @@ class Agent(object):
         del self.served_object
 
     def __del__(self):
-        self.stop()
+        if self.started() and not self.loop == None:
+            self.stop()
 
     def request_polled(self,recipient,content,timeout=5000):
         """Send a request to another agent and waits for the response.
@@ -283,13 +375,14 @@ class Agent(object):
 
         """
         #TODO check issues in loop after restarting not connected
+
         if not self.pub.closed(): #TODO : would try except be quicker
             self.pub.send_multipart(self.protocol.format(self.rep_endpoint, topic, content))
         else:
-            if self._running:
-                LOGGER.error('trying to publish on a closed pub socket %s', self.rep_endpoint)
+            if self._running.isSet():
+                LOGGER.error('TRYING TO publish on a closed pub socket %s', self.rep_endpoint)
             else:
-                LOGGER.warning('trying to publish on a not running server %s', self.rep_endpoint)
+                LOGGER.warning('TRYING TO publish on a not running server %s', self.rep_endpoint)
 
 
 
@@ -305,6 +398,10 @@ class Agent(object):
         :param content: content of the message.
         """
         #TODO : check for closed here or there?
+        if not hasattr(self,"loop"):
+            LOGGER.warning("trying to publish on a removed system ({}) have"
+                           " you proxied the server from itself?".format(self.rep_endpoint))
+            return
         self.loop.add_callback(lambda: self._publish(topic, content))
 
     def _on_incoming_xpub(self, stream, message):
@@ -387,21 +484,23 @@ class Agent(object):
         """
         LOGGER.debug((pub_endpoint,rep_endpoint,self.rep_to_pub))
         #fixing socket connections with wildcard binding
-        if pub_endpoint.startswith("tcp://*"):
-            defined_endpoint = rep_endpoint.replace("/","").split(":")[1]
-            pub_endpoint = pub_endpoint.replace("*",defined_endpoint)
-            rep_endpoint = rep_endpoint.split(":")
-            rep_endpoint[1] = "//*"
-            rep_endpoint = ":".join(rep_endpoint)
 
         pub_endpoint = pub_endpoint or self.rep_to_pub.get(rep_endpoint, None)
-        if not pub_endpoint:
+
+        if pub_endpoint is not None:
+            if pub_endpoint.startswith("tcp://*"):
+                defined_endpoint = rep_endpoint.replace("/","").split(":")[1]
+                pub_endpoint = pub_endpoint.replace("*",defined_endpoint)
+                rep_endpoint = rep_endpoint.split(":")
+                rep_endpoint[1] = "//*"
+                rep_endpoint = ":".join(rep_endpoint)
+
+        if pub_endpoint is None:
             ret = self.request(rep_endpoint, 'info')
             pub_endpoint = ret['pub_endpoint']
             self.rep_to_pub[rep_endpoint] = pub_endpoint
-        elif rep_endpoint not in [rep_endpoint]:
+        elif rep_endpoint not in self.rep_to_pub:
             self.rep_to_pub[rep_endpoint] = pub_endpoint
-
 
         agentid_topic  = self.protocol.format(rep_endpoint, topic, just_header=True)
         LOGGER.debug('Subscribing to %s with %s', agentid_topic, callback)
@@ -420,22 +519,22 @@ class Agent(object):
         :param topic: a string with the topic to subscribe.
         :param pub_endpoint: endpoint of an agent PUB socket, if not given it will be queried.
         """
-        #fixing binding to all addresses with wildcards
-        if self.remote_pub_endpoint.startswith("tcp://*"):
-            defined_endpoint = self.remote_rep_endpoint.replace("/","").split(":")
-            defined_endpoint[1] = "//*"
-            rep_endpoint = ":".join(defined_endpoint)
+        #fixing binding to all addresses with wildcards in Proxy
 
         pub_endpoint = pub_endpoint or self.rep_to_pub.get(rep_endpoint, None)
-        if not pub_endpoint:
+
+        if pub_endpoint is None:
             ret = self.request(rep_endpoint, 'info')
             pub_endpoint = ret['pub_endpoint']
             self.rep_to_pub[rep_endpoint] = pub_endpoint
 
         agentid_topic  = self.protocol.format(rep_endpoint, topic, just_header=True)
-        LOGGER.debug('Unsubscribing to %s', agentid_topic)
-        self.loop.add_callback(lambda: self._unsubscribe(pub_endpoint, agentid_topic))
-        del self.notifications_callbacks[(rep_endpoint, topic)]
+        if (rep_endpoint, topic) in self.notifications_callbacks:
+            LOGGER.debug('Unsubscribing to %s', agentid_topic)
+            self.loop.add_callback(lambda: self._unsubscribe(pub_endpoint, agentid_topic))
+            del self.notifications_callbacks[(rep_endpoint, topic)]
+        else:
+            LOGGER.warning('Unsubscribing from an not connected signal')
        
 
     def _on_notification(self, stream, message):
@@ -446,7 +545,7 @@ class Agent(object):
         """
         try:
             sender, topic, content, msgid = self.protocol.parse(message)
-            LOGGER.debug("RECEIVE notification from % (topic: %s) ", sender,topic)
+            LOGGER.debug("RECEIVE notification from %s (topic: %s) ", sender,topic)
         except:
             LOGGER.debug('Invalid message %s', message)
         else:
@@ -471,4 +570,5 @@ class Agent(object):
         LOGGER.debug('Received notification: %s, %s, %s, %s', sender, topic, msgid, content)
 
     def join(self):
-        AgentManager.join(self)
+        self.wait_stop()
+        #AgentManager.join(self)
